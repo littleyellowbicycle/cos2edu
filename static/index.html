@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>苏格拉底AI教学系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .card-hover:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+        }
+
+        .teacher-card {
+            transition: all 0.3s ease;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-50 min-h-screen">
+    <nav class="gradient-bg shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0 flex items-center">
+                        <span class="text-white text-2xl font-bold">🎓 苏格拉底AI</span>
+                    </div>
+                    <div class="hidden md:ml-10 md:flex md:space-x-8">
+                        <a href="/"
+                            class="text-white hover:text-gray-200 px-3 py-2 rounded-md text-sm font-medium bg-white/20">首页</a>
+                        <a href="/chat"
+                            class="text-white hover:text-gray-200 px-3 py-2 rounded-md text-sm font-medium">开始学习</a>
+                        <a href="/characters"
+                            class="text-white hover:text-gray-200 px-3 py-2 rounded-md text-sm font-medium">角色管理</a>
+                        <a href="/materials"
+                            class="text-white hover:text-gray-200 px-3 py-2 rounded-md text-sm font-medium">教材管理</a>
+                        <a href="/backgrounds"
+                            class="text-white hover:text-gray-200 px-3 py-2 rounded-md text-sm font-medium">背景配置</a>
+                        <a href="/settings"
+                            class="text-white hover:text-gray-200 px-3 py-2 rounded-md text-sm font-medium">设置</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div class="text-center mb-12">
+            <h1 class="text-4xl font-bold text-gray-900 mb-4">
+                苏格拉底AI教学系统
+            </h1>
+            <p class="text-xl text-gray-600 max-w-3xl mx-auto">
+                基于苏格拉底教学法，让AI导师通过提问引导你自主思考，
+                让学习像玩游戏一样有趣，效率提升300%
+            </p>
+        </div>
+
+        <div class="grid md:grid-cols-3 gap-8 mb-12">
+            <div class="bg-white rounded-xl shadow-lg p-6 card-hover transition-all duration-300">
+                <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4">
+                    <span class="text-2xl">🧠</span>
+                </div>
+                <h3 class="text-xl font-semibold text-gray-900 mb-2">苏格拉底教学法</h3>
+                <p class="text-gray-600">
+                    不直接给出答案，而是通过精心设计的问题引导你自己思考，
+                    让知识真正内化
+                </p>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-lg p-6 card-hover transition-all duration-300">
+                <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4">
+                    <span class="text-2xl">🎭</span>
+                </div>
+                <h3 class="text-xl font-semibold text-gray-900 mb-2">个性化角色</h3>
+                <p class="text-gray-600">
+                    选择你喜欢的AI导师角色，每个角色都有独特的性格和教学风格，
+                    让学习更有趣
+                </p>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-lg p-6 card-hover transition-all duration-300">
+                <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mb-4">
+                    <span class="text-2xl">📚</span>
+                </div>
+                <h3 class="text-xl font-semibold text-gray-900 mb-2">自定义教材</h3>
+                <p class="text-gray-600">
+                    上传你想要学习的任何教材内容，AI导师会基于教材内容进行教学，
+                    完全定制化学习体验
+                </p>
+            </div>
+        </div>
+
+        <div class="text-center mb-12">
+            <h2 class="text-3xl font-bold text-gray-900 mb-8">选择你的AI导师</h2>
+            <div class="grid md:grid-cols-4 gap-6" id="characters-grid">
+                <div class="text-center py-12">
+                    <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
+                    <p class="text-gray-500 mt-4">加载中...</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-lg p-8 mb-12">
+            <h2 class="text-2xl font-bold text-gray-900 mb-6">如何开始学习？</h2>
+            <div class="grid md:grid-cols-4 gap-6">
+                <div class="text-center">
+                    <div
+                        class="w-16 h-16 bg-purple-600 text-white rounded-full flex items-center justify-center text-2xl font-bold mx-auto mb-4">
+                        1</div>
+                    <h4 class="font-semibold mb-2">配置模型</h4>
+                    <p class="text-sm text-gray-600">在设置中配置你的LLM API密钥</p>
+                </div>
+                <div class="text-center">
+                    <div
+                        class="w-16 h-16 bg-purple-600 text-white rounded-full flex items-center justify-center text-2xl font-bold mx-auto mb-4">
+                        2</div>
+                    <h4 class="font-semibold mb-2">添加教材</h4>
+                    <p class="text-sm text-gray-600">上传你想要学习的教材内容</p>
+                </div>
+                <div class="text-center">
+                    <div
+                        class="w-16 h-16 bg-purple-600 text-white rounded-full flex items-center justify-center text-2xl font-bold mx-auto mb-4">
+                        3</div>
+                    <h4 class="font-semibold mb-2">选择角色</h4>
+                    <p class="text-sm text-gray-600">选择你喜欢的AI导师角色</p>
+                </div>
+                <div class="text-center">
+                    <div
+                        class="w-16 h-16 bg-purple-600 text-white rounded-full flex items-center justify-center text-2xl font-bold mx-auto mb-4">
+                        4</div>
+                    <h4 class="font-semibold mb-2">开始学习</h4>
+                    <p class="text-sm text-gray-600">与AI导师对话，开启高效学习之旅</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="text-center">
+            <a href="/chat"
+                class="inline-flex items-center px-8 py-4 border border-transparent text-lg font-medium rounded-xl shadow-lg text-white gradient-bg hover:opacity-90 transition-opacity">
+                🚀 立即开始学习
+            </a>
+        </div>
+    </div>
+
+    <script>
+        function getAvatarDisplay(char) {
+            const avatarType = char.avatar_type || 'emoji';
+            const avatar = (char.avatar || '').trim();
+            
+            const isImagePath = (path) => {
+                if (!path) return false;
+                const trimmed = path.trim();
+                return trimmed.startsWith('/api/uploads/') || 
+                       trimmed.startsWith('/uploads/') ||
+                       trimmed.startsWith('http://') ||
+                       trimmed.startsWith('https://') ||
+                       /\.(jpg|jpeg|png|gif|webp)$/i.test(trimmed);
+            };
+            
+            const getImageUrl = (path) => {
+                let url = path.trim();
+                if (url.startsWith('/uploads/')) {
+                    url = '/api' + url;
+                }
+                return url;
+            };
+            
+            if (avatarType === 'image' && avatar) {
+                return `<img src="${getImageUrl(avatar)}" class="w-full h-full object-cover rounded-full" alt="头像">`;
+            }
+            
+            if (isImagePath(avatar)) {
+                return `<img src="${getImageUrl(avatar)}" class="w-full h-full object-cover rounded-full" alt="头像">`;
+            }
+            
+            return `<span class="text-4xl">${avatar || '👩‍🏫'}</span>`;
+        }
+
+        async function loadCharacters() {
+            try {
+                const response = await fetch('/api/characters');
+                const characters = await response.json();
+
+                const grid = document.getElementById('characters-grid');
+                if (characters.length === 0) {
+                    grid.innerHTML = `
+                        <div class="col-span-4 text-center py-8">
+                            <p class="text-gray-500">暂无角色，请前往角色管理添加</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                grid.innerHTML = characters.map(char => `
+                    <div class="bg-gray-50 rounded-xl p-6 teacher-card card-hover cursor-pointer" onclick="startWithCharacter(${char.id})">
+                        <div class="w-20 h-20 bg-gradient-to-br from-purple-400 to-pink-400 rounded-full flex items-center justify-center mx-auto mb-4 overflow-hidden">
+                            ${getAvatarDisplay(char)}
+                        </div>
+                        <h4 class="font-semibold text-lg text-center">${char.name}</h4>
+                        <p class="text-sm text-gray-500 text-center mt-2 line-clamp-2">${char.description || ''}</p>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('加载角色失败:', error);
+            }
+        }
+
+        function startWithCharacter(characterId) {
+            localStorage.setItem('selectedCharacterId', characterId);
+            window.location.href = '/chat';
+        }
+
+        document.addEventListener('DOMContentLoaded', loadCharacters);
+    </script>
+</body>
+
+</html>

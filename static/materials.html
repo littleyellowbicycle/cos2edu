@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>教材管理 - 苏格拉底AI教学系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <nav class="gradient-bg shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0 flex items-center">
+                        <a href="/" class="text-white text-2xl font-bold">🎓 苏格拉底AI</a>
+                    </div>
+                    <div class="hidden md:ml-10 md:flex md:space-x-8">
+                        <a href="/" class="text-white hover:text-gray-200 px-3 py-2 rounded-md text-sm font-medium">首页</a>
+                        <a href="/chat" class="text-white hover:text-gray-200 px-3 py-2 rounded-md text-sm font-medium">开始学习</a>
+                        <a href="/characters" class="text-white hover:text-gray-200 px-3 py-2 rounded-md text-sm font-medium">角色管理</a>
+                        <a href="/materials" class="text-white hover:text-gray-200 px-3 py-2 rounded-md text-sm font-medium bg-white/20">教材管理</a>
+                        <a href="/backgrounds" class="text-white hover:text-gray-200 px-3 py-2 rounded-md text-sm font-medium">背景配置</a>
+                        <a href="/settings" class="text-white hover:text-gray-200 px-3 py-2 rounded-md text-sm font-medium">设置</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div class="flex justify-between items-center mb-8">
+            <h1 class="text-3xl font-bold text-gray-900">教材管理</h1>
+            <button onclick="showAddModal()" class="gradient-bg text-white px-6 py-2 rounded-lg font-medium hover:opacity-90">
+                + 添加教材
+            </button>
+        </div>
+
+        <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6" id="materials-grid">
+            <div class="col-span-full text-center py-12">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
+                <p class="text-gray-500 mt-4">加载中...</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="material-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" style="display: none;">
+        <div class="bg-white rounded-2xl p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+            <h3 class="text-xl font-bold text-gray-900 mb-6" id="modal-title">添加教材</h3>
+            
+            <form id="material-form" class="space-y-4">
+                <input type="hidden" id="material-id">
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">教材标题 *</label>
+                    <input type="text" id="material-title" required placeholder="例如：卷积神经网络入门"
+                        class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">简短描述</label>
+                    <input type="text" id="material-description" placeholder="一句话介绍这个教材的内容"
+                        class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">教材内容 *</label>
+                    <textarea id="material-content" rows="15" required placeholder="粘贴你想要学习的教材内容...&#10;&#10;提示：&#10;- 可以是课本的章节内容&#10;- 可以是在线课程的笔记&#10;- 可以是论文的摘要或全文&#10;- 可以是任何你想要AI基于其进行教学的文本"
+                        class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono text-sm"></textarea>
+                </div>
+            </form>
+            
+            <div class="flex justify-end space-x-3 mt-6">
+                <button onclick="hideModal()" class="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">
+                    取消
+                </button>
+                <button onclick="saveMaterial()" class="px-6 py-2 gradient-bg text-white rounded-lg hover:opacity-90">
+                    保存
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="view-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" style="display: none;">
+        <div class="bg-white rounded-2xl p-6 w-full max-w-3xl mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold text-gray-900" id="view-title">教材内容</h3>
+                <button onclick="hideViewModal()" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+            </div>
+            <div id="view-content" class="prose max-w-none text-sm whitespace-pre-wrap text-gray-700">
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function loadMaterials() {
+            try {
+                const response = await fetch('/api/materials');
+                const materials = await response.json();
+                
+                const grid = document.getElementById('materials-grid');
+                if (materials.length === 0) {
+                    grid.innerHTML = `
+                        <div class="col-span-full text-center py-12">
+                            <div class="text-6xl mb-4">📚</div>
+                            <h3 class="text-xl font-semibold text-gray-900 mb-2">暂无教材</h3>
+                            <p class="text-gray-500 mb-4">添加教材后，AI导师会基于教材内容进行教学</p>
+                            <button onclick="showAddModal()" class="gradient-bg text-white px-6 py-2 rounded-lg hover:opacity-90">
+                                添加教材
+                            </button>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                grid.innerHTML = materials.map(mat => `
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                        <div class="flex items-start justify-between mb-4">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-12 h-12 bg-gradient-to-br from-blue-400 to-cyan-400 rounded-lg flex items-center justify-center text-2xl">
+                                    📖
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <h4 class="font-semibold text-gray-900 truncate">${mat.title}</h4>
+                                    <p class="text-sm text-gray-500 truncate">${mat.description || ''}</p>
+                                </div>
+                            </div>
+                            <div class="flex space-x-2 ml-2">
+                                <button onclick="viewMaterial(${mat.id})" class="text-gray-400 hover:text-blue-600" title="查看内容">
+                                    👁️
+                                </button>
+                                <button onclick="editMaterial(${mat.id})" class="text-gray-400 hover:text-purple-600" title="编辑">
+                                    ✏️
+                                </button>
+                                <button onclick="deleteMaterial(${mat.id})" class="text-gray-400 hover:text-red-600" title="删除">
+                                    🗑️
+                                </button>
+                            </div>
+                        </div>
+                        <div class="text-sm text-gray-500">
+                            <p>内容长度：${mat.content.length} 字符</p>
+                            <p>创建时间：${new Date(mat.created_at).toLocaleString('zh-CN')}</p>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('加载教材失败:', error);
+            }
+        }
+
+        function showAddModal() {
+            document.getElementById('modal-title').textContent = '添加教材';
+            document.getElementById('material-id').value = '';
+            document.getElementById('material-form').reset();
+            document.getElementById('material-modal').style.display = 'flex';
+        }
+
+        function hideModal() {
+            document.getElementById('material-modal').style.display = 'none';
+        }
+
+        async function editMaterial(id) {
+            try {
+                const response = await fetch(`/api/materials/${id}`);
+                const mat = await response.json();
+                
+                document.getElementById('modal-title').textContent = '编辑教材';
+                document.getElementById('material-id').value = mat.id;
+                document.getElementById('material-title').value = mat.title;
+                document.getElementById('material-description').value = mat.description || '';
+                document.getElementById('material-content').value = mat.content;
+                
+                document.getElementById('material-modal').style.display = 'flex';
+            } catch (error) {
+                console.error('加载教材失败:', error);
+                alert('加载教材失败');
+            }
+        }
+
+        async function viewMaterial(id) {
+            try {
+                const response = await fetch(`/api/materials/${id}`);
+                const mat = await response.json();
+                
+                document.getElementById('view-title').textContent = mat.title;
+                document.getElementById('view-content').textContent = mat.content;
+                document.getElementById('view-modal').style.display = 'flex';
+            } catch (error) {
+                console.error('加载教材失败:', error);
+                alert('加载教材失败');
+            }
+        }
+
+        function hideViewModal() {
+            document.getElementById('view-modal').style.display = 'none';
+        }
+
+        async function saveMaterial() {
+            const id = document.getElementById('material-id').value;
+            const data = {
+                title: document.getElementById('material-title').value.trim(),
+                description: document.getElementById('material-description').value.trim(),
+                content: document.getElementById('material-content').value.trim()
+            };
+            
+            if (!data.title || !data.content) {
+                alert('请填写教材标题和内容');
+                return;
+            }
+            
+            try {
+                let response;
+                if (id) {
+                    response = await fetch(`/api/materials/${id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data)
+                    });
+                } else {
+                    response = await fetch('/api/materials', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data)
+                    });
+                }
+                
+                if (response.ok) {
+                    hideModal();
+                    loadMaterials();
+                } else {
+                    alert('保存失败');
+                }
+            } catch (error) {
+                console.error('保存失败:', error);
+                alert('保存失败');
+            }
+        }
+
+        async function deleteMaterial(id) {
+            if (!confirm('确定要删除这个教材吗？')) return;
+            
+            try {
+                const response = await fetch(`/api/materials/${id}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    loadMaterials();
+                } else {
+                    alert('删除失败');
+                }
+            } catch (error) {
+                console.error('删除失败:', error);
+                alert('删除失败');
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', loadMaterials);
+    </script>
+</body>
+</html>

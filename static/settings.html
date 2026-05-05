@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>设置 - 苏格拉底AI教学系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <nav class="gradient-bg shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0 flex items-center">
+                        <a href="/" class="text-white text-2xl font-bold">🎓 苏格拉底AI</a>
+                    </div>
+                    <div class="hidden md:ml-10 md:flex md:space-x-8">
+                        <a href="/" class="text-white hover:text-gray-200 px-3 py-2 rounded-md text-sm font-medium">首页</a>
+                        <a href="/chat" class="text-white hover:text-gray-200 px-3 py-2 rounded-md text-sm font-medium">开始学习</a>
+                        <a href="/characters" class="text-white hover:text-gray-200 px-3 py-2 rounded-md text-sm font-medium">角色管理</a>
+                        <a href="/materials" class="text-white hover:text-gray-200 px-3 py-2 rounded-md text-sm font-medium">教材管理</a>
+                        <a href="/backgrounds" class="text-white hover:text-gray-200 px-3 py-2 rounded-md text-sm font-medium">背景配置</a>
+                        <a href="/settings" class="text-white hover:text-gray-200 px-3 py-2 rounded-md text-sm font-medium bg-white/20">设置</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <h1 class="text-3xl font-bold text-gray-900 mb-8">模型设置</h1>
+
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
+            <div class="flex justify-between items-center mb-6">
+                <div>
+                    <h2 class="text-xl font-semibold text-gray-900">已配置的模型</h2>
+                    <p class="text-sm text-gray-500">配置一个或多个LLM模型用于AI教学</p>
+                </div>
+                <button onclick="showAddModal()" class="gradient-bg text-white px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90">
+                    + 添加配置
+                </button>
+            </div>
+
+            <div id="configs-list" class="space-y-4">
+                <div class="text-center py-8 text-gray-500">
+                    加载中...
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <h2 class="text-xl font-semibold text-gray-900 mb-2">支持的模型提供商</h2>
+            <p class="text-sm text-gray-500 mb-4">点击下方任意卡片快速开始配置</p>
+            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div class="border border-gray-200 rounded-lg p-4 cursor-pointer hover:border-purple-400 hover:shadow-md transition-all" 
+                     onclick="showAddModalWithProvider('openai')">
+                    <div class="flex items-center space-x-3 mb-2">
+                        <div class="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                            <span class="text-xl">🤖</span>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold">OpenAI</h4>
+                            <p class="text-xs text-gray-500">GPT-4, GPT-3.5-turbo 等</p>
+                        </div>
+                    </div>
+                    <p class="text-sm text-gray-600">需要 API Key，可从 <a href="https://platform.openai.com" target="_blank" class="text-purple-600 hover:underline" onclick="event.stopPropagation()">platform.openai.com</a> 获取</p>
+                    <p class="text-xs text-purple-500 mt-2">点击配置 →</p>
+                </div>
+
+                <div class="border border-gray-200 rounded-lg p-4 cursor-pointer hover:border-purple-400 hover:shadow-md transition-all"
+                     onclick="showAddModalWithProvider('anthropic')">
+                    <div class="flex items-center space-x-3 mb-2">
+                        <div class="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
+                            <span class="text-xl">🧠</span>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold">Anthropic</h4>
+                            <p class="text-xs text-gray-500">Claude 系列模型</p>
+                        </div>
+                    </div>
+                    <p class="text-sm text-gray-600">需要 API Key，可从 <a href="https://console.anthropic.com" target="_blank" class="text-purple-600 hover:underline" onclick="event.stopPropagation()">console.anthropic.com</a> 获取</p>
+                    <p class="text-xs text-purple-500 mt-2">点击配置 →</p>
+                </div>
+
+                <div class="border border-gray-200 rounded-lg p-4 cursor-pointer hover:border-purple-400 hover:shadow-md transition-all"
+                     onclick="showAddModalWithProvider('dashscope')">
+                    <div class="flex items-center space-x-3 mb-2">
+                        <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                            <span class="text-xl">🐉</span>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold">阿里 通义千问</h4>
+                            <p class="text-xs text-gray-500">Qwen 系列模型</p>
+                        </div>
+                    </div>
+                    <p class="text-sm text-gray-600">需要 API Key，可从 <a href="https://dashscope.console.aliyun.com" target="_blank" class="text-purple-600 hover:underline" onclick="event.stopPropagation()">dashscope.console.aliyun.com</a> 获取</p>
+                    <p class="text-xs text-purple-500 mt-2">点击配置 →</p>
+                </div>
+
+                <div class="border border-gray-200 rounded-lg p-4 cursor-pointer hover:border-purple-400 hover:shadow-md transition-all"
+                     onclick="showAddModalWithProvider('zhipu')">
+                    <div class="flex items-center space-x-3 mb-2">
+                        <div class="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                            <span class="text-xl">💎</span>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold">智谱AI</h4>
+                            <p class="text-xs text-gray-500">GLM 系列模型</p>
+                        </div>
+                    </div>
+                    <p class="text-sm text-gray-600">需要 API Key，可从 <a href="https://open.bigmodel.cn" target="_blank" class="text-purple-600 hover:underline" onclick="event.stopPropagation()">open.bigmodel.cn</a> 获取</p>
+                    <p class="text-xs text-purple-500 mt-2">点击配置 →</p>
+                </div>
+
+                <div class="border border-gray-200 rounded-lg p-4 cursor-pointer hover:border-purple-400 hover:shadow-md transition-all"
+                     onclick="showAddModalWithProvider('doubao')">
+                    <div class="flex items-center space-x-3 mb-2">
+                        <div class="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+                            <span class="text-xl">🎯</span>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold">字节跳动 豆包</h4>
+                            <p class="text-xs text-gray-500">Doubao 系列模型</p>
+                        </div>
+                    </div>
+                    <p class="text-sm text-gray-600">需要 API Key，可从 <a href="https://console.volcengine.com/ark" target="_blank" class="text-purple-600 hover:underline" onclick="event.stopPropagation()">火山引擎方舟</a> 获取</p>
+                    <p class="text-xs text-purple-500 mt-2">点击配置 →</p>
+                </div>
+
+                <div class="border border-gray-200 rounded-lg p-4 cursor-pointer hover:border-purple-400 hover:shadow-md transition-all"
+                     onclick="showAddModalWithProvider('wenxin')">
+                    <div class="flex items-center space-x-3 mb-2">
+                        <div class="w-10 h-10 bg-cyan-100 rounded-lg flex items-center justify-center">
+                            <span class="text-xl">🐾</span>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold">百度 文心一言</h4>
+                            <p class="text-xs text-gray-500">ERNIE 系列模型</p>
+                        </div>
+                    </div>
+                    <p class="text-sm text-gray-600">需要 API Key，可从 <a href="https://console.bce.baidu.com/qianfan" target="_blank" class="text-purple-600 hover:underline" onclick="event.stopPropagation()">百度智能云千帆</a> 获取。API Key格式：API Key|Secret Key</p>
+                    <p class="text-xs text-purple-500 mt-2">点击配置 →</p>
+                </div>
+
+                <div class="border border-gray-200 rounded-lg p-4 cursor-pointer hover:border-purple-400 hover:shadow-md transition-all"
+                     onclick="showAddModalWithProvider('hunyuan')">
+                    <div class="flex items-center space-x-3 mb-2">
+                        <div class="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
+                            <span class="text-xl">✨</span>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold">腾讯 混元</h4>
+                            <p class="text-xs text-gray-500">Hunyuan 系列模型</p>
+                        </div>
+                    </div>
+                    <p class="text-sm text-gray-600">需要 API Key，可从 <a href="https://cloud.tencent.com/product/hunyuan" target="_blank" class="text-purple-600 hover:underline" onclick="event.stopPropagation()">腾讯云混元</a> 获取</p>
+                    <p class="text-xs text-purple-500 mt-2">点击配置 →</p>
+                </div>
+
+                <div class="border border-gray-200 rounded-lg p-4 cursor-pointer hover:border-purple-400 hover:shadow-md transition-all"
+                     onclick="showAddModalWithProvider('moonshot')">
+                    <div class="flex items-center space-x-3 mb-2">
+                        <div class="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
+                            <span class="text-xl">🌙</span>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold">月之暗面 Moonshot</h4>
+                            <p class="text-xs text-gray-500">Kimi 系列模型</p>
+                        </div>
+                    </div>
+                    <p class="text-sm text-gray-600">需要 API Key，可从 <a href="https://platform.moonshot.cn" target="_blank" class="text-purple-600 hover:underline" onclick="event.stopPropagation()">platform.moonshot.cn</a> 获取</p>
+                    <p class="text-xs text-purple-500 mt-2">点击配置 →</p>
+                </div>
+
+                <div class="border border-gray-200 rounded-lg p-4 cursor-pointer hover:border-purple-400 hover:shadow-md transition-all"
+                     onclick="showAddModalWithProvider('gemini')">
+                    <div class="flex items-center space-x-3 mb-2">
+                        <div class="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
+                            <span class="text-xl">💫</span>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold">Google Gemini</h4>
+                            <p class="text-xs text-gray-500">Gemini 系列模型</p>
+                        </div>
+                    </div>
+                    <p class="text-sm text-gray-600">需要 API Key，可从 <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-purple-600 hover:underline" onclick="event.stopPropagation()">Google AI Studio</a> 获取</p>
+                    <p class="text-xs text-purple-500 mt-2">点击配置 →</p>
+                </div>
+
+                <div class="border-2 border-purple-400 rounded-lg p-4 cursor-pointer hover:border-purple-600 hover:shadow-lg transition-all bg-gradient-to-br from-purple-50 to-white"
+                     onclick="showAddModalWithProvider('custom')">
+                    <div class="flex items-center space-x-3 mb-2">
+                        <div class="w-10 h-10 bg-purple-200 rounded-lg flex items-center justify-center">
+                            <span class="text-xl">🔧</span>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold text-purple-800">自定义（OpenAI兼容）</h4>
+                            <p class="text-xs text-purple-600">支持任何OpenAI API兼容的服务</p>
+                        </div>
+                    </div>
+                    <p class="text-sm text-purple-700">
+                        适用于：Azure OpenAI、私有部署模型、第三方API代理、以及任何兼容OpenAI /v1/chat/completions 接口的服务。
+                    </p>
+                    <p class="text-sm font-semibold text-purple-600 mt-2">点击开始配置 →</p>
+                </div>
+            </div>
+
+            <div class="mt-6 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                <h4 class="font-medium text-yellow-800 mb-2">💡 提示</h4>
+                <p class="text-sm text-yellow-700">
+                    你可以配置多个模型，并将其中一个设为默认。创建对话时也可以选择使用哪个模型。
+                    API Key 会安全地存储在本地数据库中，不会上传到任何第三方服务器。
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div id="config-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" style="display: none;">
+        <div class="bg-white rounded-2xl p-6 w-full max-w-lg mx-4">
+            <h3 class="text-xl font-bold text-gray-900 mb-6" id="config-modal-title">添加模型配置</h3>
+            
+            <form id="config-form" class="space-y-4">
+                <input type="hidden" id="config-id">
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">模型提供商 *</label>
+                    <select id="config-provider" required 
+                        class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        onchange="handleProviderChange()">
+                        <option value="openai">OpenAI</option>
+                        <option value="anthropic">Anthropic</option>
+                        <option value="dashscope">阿里 通义千问</option>
+                        <option value="zhipu">智谱AI</option>
+                        <option value="doubao">字节跳动 豆包</option>
+                        <option value="wenxin">百度 文心一言</option>
+                        <option value="hunyuan">腾讯 混元</option>
+                        <option value="moonshot">月之暗面 Moonshot</option>
+                        <option value="gemini">Google Gemini</option>
+                        <option value="custom">自定义（OpenAI兼容）</option>
+                    </select>
+                </div>
+                
+                <div id="custom-provider-name-group" style="display: none;">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">自定义提供商名称（可选）</label>
+                    <input type="text" id="config-provider-name" placeholder="例如：我的私有模型、Azure OpenAI"
+                        class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500">
+                    <p class="text-xs text-gray-500 mt-1">用于在列表中显示的自定义名称</p>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">模型名称 *</label>
+                    <input type="text" id="config-model-name" required placeholder="例如：gpt-4o, claude-3-5-sonnet"
+                        class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500">
+                    <p class="text-xs text-gray-500 mt-1">常见模型：gpt-4o, gpt-3.5-turbo, claude-3-5-sonnet, qwen-plus, glm-4, doubao-pro-32k, ERNIE-4.0-8K, hunyuan-lite, moonshot-v1-8k, gemini-2.0-flash</p>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">API Key *</label>
+                    <input type="password" id="config-api-key" required placeholder="sk-..."
+                        class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500">
+                </div>
+                
+                <div id="base-url-group">
+                    <label class="block text-sm font-medium text-gray-700 mb-2" id="base-url-label">Base URL（可选）</label>
+                    <input type="text" id="config-base-url" placeholder="留空使用默认地址"
+                        class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500">
+                    <p class="text-xs text-gray-500 mt-1" id="base-url-hint">使用第三方兼容API时需要填写，如：https://api.openai-proxy.com/v1</p>
+                </div>
+                
+                <div class="flex items-center">
+                    <input type="checkbox" id="config-is-default" class="w-4 h-4 text-purple-600 rounded">
+                    <label for="config-is-default" class="ml-2 text-sm text-gray-700">设为默认模型</label>
+                </div>
+            </form>
+            
+            <div class="flex justify-end space-x-3 mt-6">
+                <button onclick="hideConfigModal()" class="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">
+                    取消
+                </button>
+                <button onclick="saveConfig()" class="px-6 py-2 gradient-bg text-white rounded-lg hover:opacity-90">
+                    保存
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function loadConfigs() {
+            try {
+                const response = await fetch('/api/model-configs');
+                const configs = await response.json();
+                
+                const list = document.getElementById('configs-list');
+                if (configs.length === 0) {
+                    list.innerHTML = `
+                        <div class="text-center py-8 text-gray-500">
+                            <div class="text-4xl mb-2">🔑</div>
+                            <p>暂无模型配置</p>
+                            <p class="text-sm mt-1">点击上方按钮添加你的第一个模型配置</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                const providerNames = {
+                    'openai': 'OpenAI',
+                    'anthropic': 'Anthropic',
+                    'dashscope': '阿里 通义千问',
+                    'zhipu': '智谱AI',
+                    'doubao': '字节跳动 豆包',
+                    'wenxin': '百度 文心一言',
+                    'hunyuan': '腾讯 混元',
+                    'moonshot': '月之暗面 Moonshot',
+                    'gemini': 'Google Gemini'
+                };
+                
+                list.innerHTML = configs.map(config => `
+                    <div class="border border-gray-200 rounded-lg p-4 ${config.is_default ? 'border-purple-500 bg-purple-50' : ''}">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-10 h-10 ${config.is_default ? 'bg-purple-200' : 'bg-gray-100'} rounded-lg flex items-center justify-center">
+                                    <span class="text-xl">${config.is_default ? '⭐' : '🔑'}</span>
+                                </div>
+                                <div>
+                                    <div class="flex items-center space-x-2">
+                                        <h4 class="font-semibold">${providerNames[config.provider] || config.provider}</h4>
+                                        ${config.is_default ? '<span class="text-xs bg-purple-600 text-white px-2 py-0.5 rounded">默认</span>' : ''}
+                                    </div>
+                                    <p class="text-sm text-gray-500">模型：${config.model_name}</p>
+                                    ${config.base_url ? `<p class="text-xs text-gray-400">${config.base_url}</p>` : ''}
+                                </div>
+                            </div>
+                            <div class="flex space-x-2">
+                                ${!config.is_default ? `
+                                <button onclick="setDefault(${config.id})" class="text-gray-400 hover:text-purple-600 text-sm" title="设为默认">
+                                    设为默认
+                                </button>
+                                ` : ''}
+                                <button onclick="editConfig(${config.id})" class="text-gray-400 hover:text-purple-600" title="编辑">
+                                    ✏️
+                                </button>
+                                <button onclick="deleteConfig(${config.id})" class="text-gray-400 hover:text-red-600" title="删除">
+                                    🗑️
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('加载配置失败:', error);
+            }
+        }
+
+        function showAddModal() {
+            document.getElementById('config-modal-title').textContent = '添加模型配置';
+            document.getElementById('config-id').value = '';
+            document.getElementById('config-form').reset();
+            document.getElementById('config-modal').style.display = 'flex';
+            setTimeout(handleProviderChange, 10);
+        }
+
+        function showAddModalWithProvider(provider) {
+            document.getElementById('config-modal-title').textContent = '添加模型配置';
+            document.getElementById('config-id').value = '';
+            document.getElementById('config-form').reset();
+            
+            const providerSelect = document.getElementById('config-provider');
+            
+            if (provider === 'custom') {
+                providerSelect.value = 'custom';
+                document.getElementById('config-provider-name').value = '';
+            } else {
+                providerSelect.value = provider;
+                document.getElementById('config-provider-name').value = '';
+            }
+            
+            document.getElementById('config-modal').style.display = 'flex';
+            setTimeout(handleProviderChange, 10);
+        }
+
+        function hideConfigModal() {
+            document.getElementById('config-modal').style.display = 'none';
+        }
+
+        function handleProviderChange() {
+            const provider = document.getElementById('config-provider').value;
+            const customGroup = document.getElementById('custom-provider-name-group');
+            const baseUrlLabel = document.getElementById('base-url-label');
+            const baseUrlInput = document.getElementById('config-base-url');
+            const baseUrlHint = document.getElementById('base-url-hint');
+            
+            if (provider === 'custom') {
+                customGroup.style.display = 'block';
+                baseUrlLabel.textContent = 'Base URL *';
+                baseUrlLabel.classList.add('text-red-600');
+                baseUrlInput.required = true;
+                baseUrlInput.placeholder = '例如：https://api.example.com/v1';
+                baseUrlHint.textContent = '自定义OpenAI兼容服务必须提供Base URL';
+            } else {
+                customGroup.style.display = 'none';
+                baseUrlLabel.textContent = 'Base URL（可选）';
+                baseUrlLabel.classList.remove('text-red-600');
+                baseUrlInput.required = false;
+                baseUrlInput.placeholder = '留空使用默认地址';
+                baseUrlHint.textContent = '使用第三方兼容API时需要填写，如：https://api.openai-proxy.com/v1';
+            }
+        }
+
+        async function editConfig(id) {
+            try {
+                const response = await fetch(`/api/model-configs/${id}`);
+                const config = await response.json();
+                
+                document.getElementById('config-modal-title').textContent = '编辑模型配置';
+                document.getElementById('config-id').value = config.id;
+                
+                const builtInProviders = ['openai', 'anthropic', 'dashscope', 'zhipu', 'doubao', 'wenxin', 'hunyuan', 'moonshot', 'gemini'];
+                
+                if (builtInProviders.includes(config.provider)) {
+                    document.getElementById('config-provider').value = config.provider;
+                    document.getElementById('config-provider-name').value = '';
+                } else {
+                    document.getElementById('config-provider').value = 'custom';
+                    document.getElementById('config-provider-name').value = config.provider;
+                }
+                
+                document.getElementById('config-model-name').value = config.model_name;
+                document.getElementById('config-api-key').value = config.api_key || '';
+                document.getElementById('config-base-url').value = config.base_url || '';
+                document.getElementById('config-is-default').checked = config.is_default;
+                
+                handleProviderChange();
+                document.getElementById('config-modal').style.display = 'flex';
+            } catch (error) {
+                console.error('加载配置失败:', error);
+                alert('加载配置失败');
+            }
+        }
+
+        async function setDefault(id) {
+            try {
+                const response = await fetch(`/api/model-configs/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ is_default: true })
+                });
+                
+                if (response.ok) {
+                    loadConfigs();
+                } else {
+                    alert('设置失败');
+                }
+            } catch (error) {
+                console.error('设置失败:', error);
+                alert('设置失败');
+            }
+        }
+
+        async function saveConfig() {
+            try {
+                const idElement = document.getElementById('config-id');
+                const providerSelectElement = document.getElementById('config-provider');
+                const customProviderNameElement = document.getElementById('config-provider-name');
+                const baseUrlElement = document.getElementById('config-base-url');
+                const modelNameElement = document.getElementById('config-model-name');
+                const apiKeyElement = document.getElementById('config-api-key');
+                const isDefaultElement = document.getElementById('config-is-default');
+                
+                const id = idElement ? idElement.value : '';
+                const providerSelect = providerSelectElement ? providerSelectElement.value : 'openai';
+                const customProviderName = customProviderNameElement ? customProviderNameElement.value.trim() : '';
+                const baseUrl = baseUrlElement ? baseUrlElement.value.trim() : '';
+                
+                let actualProvider = providerSelect;
+                if (providerSelect === 'custom') {
+                    actualProvider = customProviderName || 'custom';
+                }
+                
+                if (providerSelect === 'custom' && !baseUrl) {
+                    alert('自定义OpenAI兼容服务必须提供 Base URL');
+                    return;
+                }
+                
+                const modelName = modelNameElement ? modelNameElement.value.trim() : '';
+                const apiKey = apiKeyElement ? apiKeyElement.value.trim() : '';
+                const isDefault = isDefaultElement ? isDefaultElement.checked : false;
+                
+                if (!modelName) {
+                    alert('请填写模型名称');
+                    return;
+                }
+                
+                if (!apiKey && providerSelect !== 'custom') {
+                    alert('请填写 API Key');
+                    return;
+                }
+                
+                const data = {
+                    provider: actualProvider,
+                    model_name: modelName,
+                    api_key: apiKey || null,
+                    base_url: baseUrl || null,
+                    is_default: isDefault
+                };
+                
+                console.log('保存配置:', data);
+                
+                let response;
+                if (id) {
+                    response = await fetch(`/api/model-configs/${id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data)
+                    });
+                } else {
+                    response = await fetch('/api/model-configs', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data)
+                    });
+                }
+                
+                console.log('响应状态:', response.status);
+                
+                if (response.ok) {
+                    hideConfigModal();
+                    loadConfigs();
+                } else {
+                    const errorText = await response.text();
+                    console.error('保存失败:', errorText);
+                    alert('保存失败: ' + (errorText || '未知错误 (HTTP ' + response.status + ')'));
+                }
+            } catch (error) {
+                console.error('保存配置时出错:', error);
+                alert('保存失败: ' + error.message);
+            }
+        }
+
+        async function deleteConfig(id) {
+            if (!confirm('确定要删除这个模型配置吗？')) return;
+            
+            try {
+                const response = await fetch(`/api/model-configs/${id}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    loadConfigs();
+                } else {
+                    alert('删除失败');
+                }
+            } catch (error) {
+                console.error('删除失败:', error);
+                alert('删除失败');
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', loadConfigs);
+    </script>
+</body>
+</html>
