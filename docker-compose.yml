@@ -1,0 +1,97 @@
+version: '3.8'
+
+networks:
+  cos2edu-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+volumes:
+  redis_data:
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+    compress: "true"
+
+x-resources: &default-resources
+  ulimits:
+    nofile:
+      soft: 65536
+      hard: 65536
+    nproc: 65535
+
+services:
+  cos2edu:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        UID: ${UID:-1000}
+        GID: ${GID:-1000}
+    container_name: cos2edu-app
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    volumes:
+      - ./data:/app/data
+      - ./.env:/app/.env:ro
+    environment:
+      - APP_ENV=${APP_ENV:-prod}
+      - HOST=0.0.0.0
+      - PORT=8000
+    restart: unless-stopped
+    networks:
+      - cos2edu-network
+    logging: *default-logging
+    <<: *default-resources
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "python", "-c", "import http.client; conn = http.client.HTTPConnection('localhost', 8000); conn.request('GET', '/health'); r = conn.getresponse(); print(r.read().decode() if r.status == 200 else 'FAIL'); conn.close()"]
+      interval: 30s
+      timeout: 10s
+      start_period: 120s
+      retries: 3
+    profiles:
+      - app
+      - all
+
+  redis:
+    image: redis:7-alpine
+    container_name: cos2edu-redis
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    restart: unless-stopped
+    networks:
+      - cos2edu-network
+    logging: *default-logging
+    <<: *default-resources
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    profiles:
+      - redis
+      - all

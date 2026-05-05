@@ -1,15 +1,33 @@
 from datetime import datetime
-from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, ForeignKey, Boolean
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, relationship
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean, select
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from sqlalchemy.orm import DeclarativeBase, relationship
+from sqlalchemy.pool import NullPool, QueuePool
 from app.core.config import settings
 
-engine = create_engine(
-    settings.DATABASE_URL,
-    connect_args={"check_same_thread": False}
+
+def _is_sqlite() -> bool:
+    return settings.DATABASE_URL.startswith("sqlite")
+
+
+_engine_kwargs = {"connect_args": {"check_same_thread": False}} if _is_sqlite() else {
+    "poolclass": QueuePool,
+    "pool_size": 10,
+    "max_overflow": 20,
+    "pool_pre_ping": True,
+    "pool_recycle": 3600,
+}
+
+engine = create_async_engine(settings.DATABASE_URL, **_engine_kwargs)
+AsyncSessionLocal = async_sessionmaker(
+    engine,
+    class_=AsyncSession,
+    expire_on_commit=False
 )
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
+
+
+class Base(DeclarativeBase):
+    pass
 
 
 class Character(Base):
@@ -21,7 +39,7 @@ class Character(Base):
     personality = Column(Text, nullable=False)
     background = Column(Text, nullable=True)
     avatar = Column(String(500), nullable=True)
-    avatar_type = Column(String(20), default="emoji")  # emoji, image
+    avatar_type = Column(String(20), default="emoji")
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -50,7 +68,13 @@ class Conversation(Base):
     title = Column(String(200), nullable=True)
     character_id = Column(Integer, ForeignKey("characters.id"))
     material_id = Column(Integer, ForeignKey("materials.id"), nullable=True)
-    teaching_mode = Column(String(50), default="socratic")  # socratic, explanation, mixed
+    teaching_mode = Column(String(50), default="socratic")
+    
+    summary = Column(Text, nullable=True)
+    summary_covered_message_count = Column(Integer, default=0)
+    summary_created_at = Column(DateTime, nullable=True)
+    summary_updated_at = Column(DateTime, nullable=True)
+    
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -64,7 +88,7 @@ class Message(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     conversation_id = Column(Integer, ForeignKey("conversations.id"))
-    role = Column(String(50), nullable=False)  # user, assistant
+    role = Column(String(50), nullable=False)
     content = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -76,8 +100,8 @@ class BackgroundConfig(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), nullable=False)
-    background_type = Column(String(20), default="color")  # color, image
-    background_value = Column(String(500), nullable=False)  # 颜色值或图片路径
+    background_type = Column(String(20), default="color")
+    background_value = Column(String(500), nullable=False)
     is_active = Column(Boolean, default=False)
     is_default = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -88,7 +112,7 @@ class ModelConfig(Base):
     __tablename__ = "model_configs"
 
     id = Column(Integer, primary_key=True, index=True)
-    provider = Column(String(50), nullable=False)  # openai, anthropic, dashscope, zhipu
+    provider = Column(String(50), nullable=False)
     model_name = Column(String(100), nullable=False)
     api_key = Column(String(255), nullable=True)
     base_url = Column(String(255), nullable=True)
@@ -98,5 +122,6 @@ class ModelConfig(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
-def init_db():
-    Base.metadata.create_all(bind=engine)
+async def init_db():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)

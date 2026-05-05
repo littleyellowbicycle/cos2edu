@@ -1,6 +1,10 @@
+import json
+import logging
 from abc import ABC, abstractmethod
-from typing import List, Dict, Optional, AsyncIterator
+from typing import List, Dict, Optional, AsyncIterator, Tuple
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class BaseLLMProvider(ABC):
@@ -26,12 +30,48 @@ class BaseLLMProvider(ABC):
     ) -> AsyncIterator[str]:
         pass
 
+    def _extract_system_prompt(
+        self,
+        messages: List[Dict[str, str]],
+        keep_original: bool = True
+    ) -> Tuple[str, List[Dict[str, str]]]:
+        system_prompt = ""
+        filtered_messages = []
+        for msg in messages:
+            if msg["role"] == "system":
+                system_prompt = msg["content"]
+            else:
+                if keep_original:
+                    filtered_messages.append(msg)
+                else:
+                    filtered_messages.append({
+                        "role": msg["role"],
+                        "content": msg["content"]
+                    })
+        return system_prompt, filtered_messages
 
-class OpenAIProvider(BaseLLMProvider):
+
+class BaseOpenAICompatibleProvider(BaseLLMProvider):
+    api_key_setting: str = "OPENAI_API_KEY"
+    base_url_setting: Optional[str] = "OPENAI_BASE_URL"
+    default_base_url: Optional[str] = None
+    default_model: str = "gpt-4o"
+
     def __init__(self, api_key: Optional[str] = None, base_url: Optional[str] = None):
-        self.api_key = api_key or settings.OPENAI_API_KEY
-        self.base_url = base_url or settings.OPENAI_BASE_URL
-        
+        if api_key:
+            self.api_key = api_key
+        else:
+            self.api_key = getattr(settings, self.api_key_setting, None)
+
+        if base_url:
+            self.base_url = base_url
+        elif self.base_url_setting and getattr(settings, self.base_url_setting, None):
+            self.base_url = getattr(settings, self.base_url_setting)
+        elif self.default_base_url:
+            self.base_url = self.default_base_url
+        else:
+            self.base_url = None
+
     async def _get_client(self):
         from openai import AsyncOpenAI
         return AsyncOpenAI(
@@ -42,14 +82,14 @@ class OpenAIProvider(BaseLLMProvider):
     async def chat(
         self,
         messages: List[Dict[str, str]],
-        model: str = "gpt-4o",
+        model: str = None,
         temperature: float = 0.7,
         max_tokens: int = 2000,
         **kwargs
     ) -> str:
         client = await self._get_client()
         response = await client.chat.completions.create(
-            model=model,
+            model=model or self.default_model,
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
@@ -60,14 +100,14 @@ class OpenAIProvider(BaseLLMProvider):
     async def chat_stream(
         self,
         messages: List[Dict[str, str]],
-        model: str = "gpt-4o",
+        model: str = None,
         temperature: float = 0.7,
         max_tokens: int = 2000,
         **kwargs
     ) -> AsyncIterator[str]:
         client = await self._get_client()
         stream = await client.chat.completions.create(
-            model=model,
+            model=model or self.default_model,
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
@@ -79,6 +119,13 @@ class OpenAIProvider(BaseLLMProvider):
                 delta = chunk.choices[0].delta
                 if delta and hasattr(delta, 'content') and delta.content:
                     yield delta.content
+
+
+class OpenAIProvider(BaseOpenAICompatibleProvider):
+    api_key_setting: str = "OPENAI_API_KEY"
+    base_url_setting: str = "OPENAI_BASE_URL"
+    default_base_url: Optional[str] = None
+    default_model: str = "gpt-4o"
 
 
 class AnthropicProvider(BaseLLMProvider):
@@ -99,13 +146,7 @@ class AnthropicProvider(BaseLLMProvider):
     ) -> str:
         client = await self._get_client()
         
-        system_prompt = ""
-        filtered_messages = []
-        for msg in messages:
-            if msg["role"] == "system":
-                system_prompt = msg["content"]
-            else:
-                filtered_messages.append(msg)
+        system_prompt, filtered_messages = self._extract_system_prompt(messages, keep_original=True)
         
         response = await client.messages.create(
             model=model,
@@ -127,13 +168,7 @@ class AnthropicProvider(BaseLLMProvider):
     ) -> AsyncIterator[str]:
         client = await self._get_client()
         
-        system_prompt = ""
-        filtered_messages = []
-        for msg in messages:
-            if msg["role"] == "system":
-                system_prompt = msg["content"]
-            else:
-                filtered_messages.append(msg)
+        system_prompt, filtered_messages = self._extract_system_prompt(messages, keep_original=True)
         
         async with client.messages.stream(
             model=model,
@@ -147,174 +182,25 @@ class AnthropicProvider(BaseLLMProvider):
                 yield text
 
 
-class DashScopeProvider(BaseLLMProvider):
-    def __init__(self, api_key: Optional[str] = None):
-        self.api_key = api_key or settings.DASHSCOPE_API_KEY
-        self.base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-
-    async def _get_client(self):
-        from openai import AsyncOpenAI
-        return AsyncOpenAI(
-            api_key=self.api_key,
-            base_url=self.base_url
-        )
-
-    async def chat(
-        self,
-        messages: List[Dict[str, str]],
-        model: str = "qwen-plus",
-        temperature: float = 0.7,
-        max_tokens: int = 2000,
-        **kwargs
-    ) -> str:
-        client = await self._get_client()
-        response = await client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            **kwargs
-        )
-        return response.choices[0].message.content
-
-    async def chat_stream(
-        self,
-        messages: List[Dict[str, str]],
-        model: str = "qwen-plus",
-        temperature: float = 0.7,
-        max_tokens: int = 2000,
-        **kwargs
-    ) -> AsyncIterator[str]:
-        client = await self._get_client()
-        stream = await client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            stream=True,
-            **kwargs
-        )
-        async for chunk in stream:
-            if chunk.choices and len(chunk.choices) > 0:
-                delta = chunk.choices[0].delta
-                if delta and hasattr(delta, 'content') and delta.content:
-                    yield delta.content
+class DashScopeProvider(BaseOpenAICompatibleProvider):
+    api_key_setting: str = "DASHSCOPE_API_KEY"
+    base_url_setting: Optional[str] = None
+    default_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    default_model: str = "qwen-plus"
 
 
-class ZhipuProvider(BaseLLMProvider):
-    def __init__(self, api_key: Optional[str] = None):
-        self.api_key = api_key or settings.ZHIPU_API_KEY
-        self.base_url = "https://open.bigmodel.cn/api/paas/v4/"
-
-    async def _get_client(self):
-        from openai import AsyncOpenAI
-        return AsyncOpenAI(
-            api_key=self.api_key,
-            base_url=self.base_url
-        )
-
-    async def chat(
-        self,
-        messages: List[Dict[str, str]],
-        model: str = "glm-4",
-        temperature: float = 0.7,
-        max_tokens: int = 2000,
-        **kwargs
-    ) -> str:
-        client = await self._get_client()
-        response = await client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            **kwargs
-        )
-        return response.choices[0].message.content
-
-    async def chat_stream(
-        self,
-        messages: List[Dict[str, str]],
-        model: str = "glm-4",
-        temperature: float = 0.7,
-        max_tokens: int = 2000,
-        **kwargs
-    ) -> AsyncIterator[str]:
-        client = await self._get_client()
-        stream = await client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            stream=True,
-            **kwargs
-        )
-        async for chunk in stream:
-            if chunk.choices and len(chunk.choices) > 0:
-                delta = chunk.choices[0].delta
-                if delta and hasattr(delta, 'content') and delta.content:
-                    yield delta.content
+class ZhipuProvider(BaseOpenAICompatibleProvider):
+    api_key_setting: str = "ZHIPU_API_KEY"
+    base_url_setting: Optional[str] = None
+    default_base_url: str = "https://open.bigmodel.cn/api/paas/v4/"
+    default_model: str = "glm-4"
 
 
-PROVIDER_MAP = {
-    "openai": OpenAIProvider,
-    "anthropic": AnthropicProvider,
-    "dashscope": DashScopeProvider,
-    "zhipu": ZhipuProvider,
-}
-
-
-class DoubaoProvider(BaseLLMProvider):
-    def __init__(self, api_key: Optional[str] = None, base_url: Optional[str] = None):
-        self.api_key = api_key or settings.DOUBAO_API_KEY
-        self.base_url = base_url or settings.DOUBAO_BASE_URL or "https://ark.cn-beijing.volces.com/api/v3"
-    
-    async def _get_client(self):
-        from openai import AsyncOpenAI
-        return AsyncOpenAI(
-            api_key=self.api_key,
-            base_url=self.base_url
-        )
-
-    async def chat(
-        self,
-        messages: List[Dict[str, str]],
-        model: str = "doubao-pro-32k",
-        temperature: float = 0.7,
-        max_tokens: int = 2000,
-        **kwargs
-    ) -> str:
-        client = await self._get_client()
-        response = await client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            **kwargs
-        )
-        return response.choices[0].message.content
-
-    async def chat_stream(
-        self,
-        messages: List[Dict[str, str]],
-        model: str = "doubao-pro-32k",
-        temperature: float = 0.7,
-        max_tokens: int = 2000,
-        **kwargs
-    ) -> AsyncIterator[str]:
-        client = await self._get_client()
-        stream = await client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            stream=True,
-            **kwargs
-        )
-        async for chunk in stream:
-            if chunk.choices and len(chunk.choices) > 0:
-                delta = chunk.choices[0].delta
-                if delta and hasattr(delta, 'content') and delta.content:
-                    yield delta.content
+class DoubaoProvider(BaseOpenAICompatibleProvider):
+    api_key_setting: str = "DOUBAO_API_KEY"
+    base_url_setting: str = "DOUBAO_BASE_URL"
+    default_base_url: str = "https://ark.cn-beijing.volces.com/api/v3"
+    default_model: str = "doubao-pro-32k"
 
 
 class WenxinProvider(BaseLLMProvider):
@@ -358,16 +244,7 @@ class WenxinProvider(BaseLLMProvider):
         import aiohttp
         url = f"{self.base_url}/chat/{model}?access_token={access_token}"
         
-        system_prompt = ""
-        chat_messages = []
-        for msg in messages:
-            if msg["role"] == "system":
-                system_prompt = msg["content"]
-            else:
-                chat_messages.append({
-                    "role": msg["role"],
-                    "content": msg["content"]
-                })
+        system_prompt, chat_messages = self._extract_system_prompt(messages, keep_original=False)
         
         payload = {
             "messages": chat_messages,
@@ -398,16 +275,7 @@ class WenxinProvider(BaseLLMProvider):
         import aiohttp
         url = f"{self.base_url}/chat/{model}?access_token={access_token}"
         
-        system_prompt = ""
-        chat_messages = []
-        for msg in messages:
-            if msg["role"] == "system":
-                system_prompt = msg["content"]
-            else:
-                chat_messages.append({
-                    "role": msg["role"],
-                    "content": msg["content"]
-                })
+        system_prompt, chat_messages = self._extract_system_prompt(messages, keep_original=False)
         
         payload = {
             "messages": chat_messages,
@@ -426,120 +294,27 @@ class WenxinProvider(BaseLLMProvider):
                         data = line[6:].strip()
                         if data:
                             try:
-                                import json
                                 parsed = json.loads(data)
                                 if "result" in parsed and parsed["result"]:
                                     yield parsed["result"]
-                            except:
-                                pass
+                            except json.JSONDecodeError:
+                                logger.debug(f"文心一言流式响应JSON解析失败: {data[:100]}")
+                            except Exception as e:
+                                logger.warning(f"文心一言流式响应处理异常: {str(e)}")
 
 
-class HunyuanProvider(BaseLLMProvider):
-    def __init__(self, api_key: Optional[str] = None, base_url: Optional[str] = None):
-        self.api_key = api_key or settings.HUNYUAN_API_KEY
-        self.base_url = base_url or settings.HUNYUAN_BASE_URL or "https://api.hunyuan.cloud.tencent.com/v1"
-    
-    async def _get_client(self):
-        from openai import AsyncOpenAI
-        return AsyncOpenAI(
-            api_key=self.api_key,
-            base_url=self.base_url
-        )
-
-    async def chat(
-        self,
-        messages: List[Dict[str, str]],
-        model: str = "hunyuan-lite",
-        temperature: float = 0.7,
-        max_tokens: int = 2000,
-        **kwargs
-    ) -> str:
-        client = await self._get_client()
-        response = await client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            **kwargs
-        )
-        return response.choices[0].message.content
-
-    async def chat_stream(
-        self,
-        messages: List[Dict[str, str]],
-        model: str = "hunyuan-lite",
-        temperature: float = 0.7,
-        max_tokens: int = 2000,
-        **kwargs
-    ) -> AsyncIterator[str]:
-        client = await self._get_client()
-        stream = await client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            stream=True,
-            **kwargs
-        )
-        async for chunk in stream:
-            if chunk.choices and len(chunk.choices) > 0:
-                delta = chunk.choices[0].delta
-                if delta and hasattr(delta, 'content') and delta.content:
-                    yield delta.content
+class HunyuanProvider(BaseOpenAICompatibleProvider):
+    api_key_setting: str = "HUNYUAN_API_KEY"
+    base_url_setting: str = "HUNYUAN_BASE_URL"
+    default_base_url: str = "https://api.hunyuan.cloud.tencent.com/v1"
+    default_model: str = "hunyuan-lite"
 
 
-class MoonshotProvider(BaseLLMProvider):
-    def __init__(self, api_key: Optional[str] = None, base_url: Optional[str] = None):
-        self.api_key = api_key or settings.MOONSHOT_API_KEY
-        self.base_url = base_url or settings.MOONSHOT_BASE_URL or "https://api.moonshot.cn/v1"
-    
-    async def _get_client(self):
-        from openai import AsyncOpenAI
-        return AsyncOpenAI(
-            api_key=self.api_key,
-            base_url=self.base_url
-        )
-
-    async def chat(
-        self,
-        messages: List[Dict[str, str]],
-        model: str = "moonshot-v1-8k",
-        temperature: float = 0.7,
-        max_tokens: int = 2000,
-        **kwargs
-    ) -> str:
-        client = await self._get_client()
-        response = await client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            **kwargs
-        )
-        return response.choices[0].message.content
-
-    async def chat_stream(
-        self,
-        messages: List[Dict[str, str]],
-        model: str = "moonshot-v1-8k",
-        temperature: float = 0.7,
-        max_tokens: int = 2000,
-        **kwargs
-    ) -> AsyncIterator[str]:
-        client = await self._get_client()
-        stream = await client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            stream=True,
-            **kwargs
-        )
-        async for chunk in stream:
-            if chunk.choices and len(chunk.choices) > 0:
-                delta = chunk.choices[0].delta
-                if delta and hasattr(delta, 'content') and delta.content:
-                    yield delta.content
+class MoonshotProvider(BaseOpenAICompatibleProvider):
+    api_key_setting: str = "MOONSHOT_API_KEY"
+    base_url_setting: str = "MOONSHOT_BASE_URL"
+    default_base_url: str = "https://api.moonshot.cn/v1"
+    default_model: str = "moonshot-v1-8k"
 
 
 class GeminiProvider(BaseLLMProvider):
@@ -547,16 +322,7 @@ class GeminiProvider(BaseLLMProvider):
         self.api_key = api_key or settings.GEMINI_API_KEY
         self.base_url = base_url or settings.GEMINI_BASE_URL or "https://generativelanguage.googleapis.com/v1beta"
     
-    async def chat(
-        self,
-        messages: List[Dict[str, str]],
-        model: str = "gemini-2.0-flash",
-        temperature: float = 0.7,
-        max_tokens: int = 2000,
-        **kwargs
-    ) -> str:
-        import aiohttp
-        
+    def _build_gemini_contents(self, messages: List[Dict[str, str]]) -> Tuple[str, List[Dict]]:
         system_prompt = ""
         contents = []
         for msg in messages:
@@ -568,6 +334,19 @@ class GeminiProvider(BaseLLMProvider):
                     "role": role,
                     "parts": [{"text": msg["content"]}]
                 })
+        return system_prompt, contents
+
+    async def chat(
+        self,
+        messages: List[Dict[str, str]],
+        model: str = "gemini-2.0-flash",
+        temperature: float = 0.7,
+        max_tokens: int = 2000,
+        **kwargs
+    ) -> str:
+        import aiohttp
+        
+        system_prompt, contents = self._build_gemini_contents(messages)
         
         url = f"{self.base_url}/models/{model}:generateContent?key={self.api_key}"
         
@@ -603,17 +382,7 @@ class GeminiProvider(BaseLLMProvider):
     ) -> AsyncIterator[str]:
         import aiohttp
         
-        system_prompt = ""
-        contents = []
-        for msg in messages:
-            if msg["role"] == "system":
-                system_prompt = msg["content"]
-            else:
-                role = "user" if msg["role"] == "user" else "model"
-                contents.append({
-                    "role": role,
-                    "parts": [{"text": msg["content"]}]
-                })
+        system_prompt, contents = self._build_gemini_contents(messages)
         
         url = f"{self.base_url}/models/{model}:streamGenerateContent?key={self.api_key}&alt=sse"
         
@@ -638,7 +407,6 @@ class GeminiProvider(BaseLLMProvider):
                         data = line[6:].strip()
                         if data:
                             try:
-                                import json
                                 parsed = json.loads(data)
                                 if "candidates" in parsed and len(parsed["candidates"]) > 0:
                                     candidate = parsed["candidates"][0]
@@ -646,17 +414,28 @@ class GeminiProvider(BaseLLMProvider):
                                         text = candidate["content"]["parts"][0].get("text", "")
                                         if text:
                                             yield text
-                            except:
-                                pass
+                            except json.JSONDecodeError:
+                                logger.debug(f"Gemini流式响应JSON解析失败: {data[:100]}")
+                            except Exception as e:
+                                logger.warning(f"Gemini流式响应处理异常: {str(e)}")
 
 
-PROVIDER_MAP.update({
+PROVIDER_MAP = {
+    "openai": OpenAIProvider,
+    "anthropic": AnthropicProvider,
+    "dashscope": DashScopeProvider,
+    "zhipu": ZhipuProvider,
     "doubao": DoubaoProvider,
     "wenxin": WenxinProvider,
     "hunyuan": HunyuanProvider,
     "moonshot": MoonshotProvider,
     "gemini": GeminiProvider,
-})
+}
+
+
+OPENAI_COMPATIBLE_PROVIDERS = {
+    "openai", "dashscope", "zhipu", "doubao", "hunyuan", "moonshot"
+}
 
 
 def get_provider(provider_name: str, api_key: Optional[str] = None, base_url: Optional[str] = None) -> BaseLLMProvider:
@@ -664,9 +443,11 @@ def get_provider(provider_name: str, api_key: Optional[str] = None, base_url: Op
     provider_class = PROVIDER_MAP.get(provider_name_lower)
     
     if provider_class:
-        if provider_name_lower in ["openai", "dashscope", "zhipu", "doubao", "hunyuan", "moonshot", "gemini"]:
+        if provider_name_lower in OPENAI_COMPATIBLE_PROVIDERS:
             return provider_class(api_key=api_key, base_url=base_url)
         else:
+            if provider_name_lower == "gemini":
+                return provider_class(api_key=api_key, base_url=base_url)
             return provider_class(api_key=api_key)
     
     if base_url:

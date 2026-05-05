@@ -1,7 +1,5 @@
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy.orm import Session
-from app.core.database import SessionLocal
+from fastapi import APIRouter, HTTPException, Request
 from app.core.limiter import limiter
 from app.schemas import (
     CharacterCreate, CharacterUpdate, CharacterResponse,
@@ -20,24 +18,16 @@ from app.services import (
 router = APIRouter()
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
 @router.get("/characters", response_model=List[CharacterResponse])
 @limiter.limit("60/minute")
-def get_characters(request: Request, db: Session = Depends(get_db)):
-    return CharacterService.get_all(db)
+async def get_characters(request: Request):
+    return await CharacterService.get_all()
 
 
 @router.get("/characters/{character_id}", response_model=CharacterResponse)
 @limiter.limit("60/minute")
-def get_character(request: Request, character_id: int, db: Session = Depends(get_db)):
-    character = CharacterService.get_by_id(db, character_id)
+async def get_character(request: Request, character_id: int):
+    character = await CharacterService.get_by_id(character_id)
     if not character:
         raise HTTPException(status_code=404, detail="角色不存在")
     return character
@@ -45,19 +35,18 @@ def get_character(request: Request, character_id: int, db: Session = Depends(get
 
 @router.post("/characters", response_model=CharacterResponse)
 @limiter.limit("20/minute")
-def create_character(request: Request, character: CharacterCreate, db: Session = Depends(get_db)):
-    return CharacterService.create(db, character)
+async def create_character(request: Request, character: CharacterCreate):
+    return await CharacterService.create(character)
 
 
 @router.put("/characters/{character_id}", response_model=CharacterResponse)
 @limiter.limit("20/minute")
-def update_character(
+async def update_character(
     request: Request,
     character_id: int, 
-    character: CharacterUpdate, 
-    db: Session = Depends(get_db)
+    character: CharacterUpdate
 ):
-    updated = CharacterService.update(db, character_id, character)
+    updated = await CharacterService.update(character_id, character)
     if not updated:
         raise HTTPException(status_code=404, detail="角色不存在")
     return updated
@@ -65,22 +54,22 @@ def update_character(
 
 @router.delete("/characters/{character_id}")
 @limiter.limit("20/minute")
-def delete_character(request: Request, character_id: int, db: Session = Depends(get_db)):
-    if not CharacterService.delete(db, character_id):
+async def delete_character(request: Request, character_id: int):
+    if not await CharacterService.delete(character_id):
         raise HTTPException(status_code=404, detail="角色不存在")
     return {"message": "删除成功"}
 
 
 @router.get("/materials", response_model=List[MaterialResponse])
 @limiter.limit("60/minute")
-def get_materials(request: Request, db: Session = Depends(get_db)):
-    return MaterialService.get_all(db)
+async def get_materials(request: Request):
+    return await MaterialService.get_all()
 
 
 @router.get("/materials/{material_id}", response_model=MaterialResponse)
 @limiter.limit("60/minute")
-def get_material(request: Request, material_id: int, db: Session = Depends(get_db)):
-    material = MaterialService.get_by_id(db, material_id)
+async def get_material(request: Request, material_id: int):
+    material = await MaterialService.get_by_id(material_id)
     if not material:
         raise HTTPException(status_code=404, detail="教材不存在")
     return material
@@ -88,19 +77,18 @@ def get_material(request: Request, material_id: int, db: Session = Depends(get_d
 
 @router.post("/materials", response_model=MaterialResponse)
 @limiter.limit("20/minute")
-def create_material(request: Request, material: MaterialCreate, db: Session = Depends(get_db)):
-    return MaterialService.create(db, material)
+async def create_material(request: Request, material: MaterialCreate):
+    return await MaterialService.create(material)
 
 
 @router.put("/materials/{material_id}", response_model=MaterialResponse)
 @limiter.limit("20/minute")
-def update_material(
+async def update_material(
     request: Request,
     material_id: int, 
-    material: MaterialUpdate, 
-    db: Session = Depends(get_db)
+    material: MaterialUpdate
 ):
-    updated = MaterialService.update(db, material_id, material)
+    updated = await MaterialService.update(material_id, material)
     if not updated:
         raise HTTPException(status_code=404, detail="教材不存在")
     return updated
@@ -108,25 +96,34 @@ def update_material(
 
 @router.delete("/materials/{material_id}")
 @limiter.limit("20/minute")
-def delete_material(request: Request, material_id: int, db: Session = Depends(get_db)):
-    if not MaterialService.delete(db, material_id):
+async def delete_material(request: Request, material_id: int):
+    if not await MaterialService.delete(material_id):
         raise HTTPException(status_code=404, detail="教材不存在")
     return {"message": "删除成功"}
 
 
 @router.get("/conversations", response_model=List[ConversationResponse])
 @limiter.limit("60/minute")
-def get_conversations(request: Request, db: Session = Depends(get_db)):
-    return ConversationService.get_all(db)
+async def get_conversations(request: Request):
+    return await ConversationService.get_all()
 
 
 @router.get("/conversations/{conversation_id}", response_model=ConversationWithMessages)
 @limiter.limit("60/minute")
-def get_conversation(request: Request, conversation_id: int, db: Session = Depends(get_db)):
-    conversation = ConversationService.get_by_id(db, conversation_id)
+async def get_conversation(request: Request, conversation_id: int):
+    conversation = await ConversationService.get_by_id(conversation_id)
     if not conversation:
         raise HTTPException(status_code=404, detail="对话不存在")
-    messages = MessageService.get_by_conversation(db, conversation_id)
+    messages = await MessageService.get_by_conversation(conversation_id)
+    
+    character = None
+    if conversation.character_id:
+        character = await CharacterService.get_by_id(conversation.character_id)
+    
+    material = None
+    if conversation.material_id:
+        material = await MaterialService.get_by_id(conversation.material_id)
+    
     return {
         "id": conversation.id,
         "title": conversation.title,
@@ -135,27 +132,26 @@ def get_conversation(request: Request, conversation_id: int, db: Session = Depen
         "teaching_mode": conversation.teaching_mode,
         "created_at": conversation.created_at,
         "updated_at": conversation.updated_at,
-        "character": conversation.character,
-        "material": conversation.material,
+        "character": character,
+        "material": material,
         "messages": messages
     }
 
 
 @router.post("/conversations", response_model=ConversationResponse)
 @limiter.limit("30/minute")
-def create_conversation(request: Request, conversation: ConversationCreate, db: Session = Depends(get_db)):
-    return ConversationService.create(db, conversation)
+async def create_conversation(request: Request, conversation: ConversationCreate):
+    return await ConversationService.create(conversation)
 
 
 @router.put("/conversations/{conversation_id}", response_model=ConversationResponse)
 @limiter.limit("30/minute")
-def update_conversation(
+async def update_conversation(
     request: Request,
     conversation_id: int, 
-    conversation: ConversationUpdate, 
-    db: Session = Depends(get_db)
+    conversation: ConversationUpdate
 ):
-    updated = ConversationService.update(db, conversation_id, conversation)
+    updated = await ConversationService.update(conversation_id, conversation)
     if not updated:
         raise HTTPException(status_code=404, detail="对话不存在")
     return updated
@@ -163,22 +159,22 @@ def update_conversation(
 
 @router.delete("/conversations/{conversation_id}")
 @limiter.limit("30/minute")
-def delete_conversation(request: Request, conversation_id: int, db: Session = Depends(get_db)):
-    if not ConversationService.delete(db, conversation_id):
+async def delete_conversation(request: Request, conversation_id: int):
+    if not await ConversationService.delete(conversation_id):
         raise HTTPException(status_code=404, detail="对话不存在")
     return {"message": "删除成功"}
 
 
 @router.get("/model-configs", response_model=List[ModelConfigResponse])
 @limiter.limit("60/minute")
-def get_model_configs(request: Request, db: Session = Depends(get_db)):
-    return ModelConfigService.get_all(db)
+async def get_model_configs(request: Request):
+    return await ModelConfigService.get_all()
 
 
 @router.get("/model-configs/{config_id}", response_model=ModelConfigResponse)
 @limiter.limit("60/minute")
-def get_model_config(request: Request, config_id: int, db: Session = Depends(get_db)):
-    config = ModelConfigService.get_by_id(db, config_id)
+async def get_model_config(request: Request, config_id: int):
+    config = await ModelConfigService.get_by_id(config_id)
     if not config:
         raise HTTPException(status_code=404, detail="模型配置不存在")
     return config
@@ -186,19 +182,18 @@ def get_model_config(request: Request, config_id: int, db: Session = Depends(get
 
 @router.post("/model-configs", response_model=ModelConfigResponse)
 @limiter.limit("20/minute")
-def create_model_config(request: Request, config: ModelConfigCreate, db: Session = Depends(get_db)):
-    return ModelConfigService.create(db, config)
+async def create_model_config(request: Request, config: ModelConfigCreate):
+    return await ModelConfigService.create(config)
 
 
 @router.put("/model-configs/{config_id}", response_model=ModelConfigResponse)
 @limiter.limit("20/minute")
-def update_model_config(
+async def update_model_config(
     request: Request,
     config_id: int, 
-    config: ModelConfigUpdate, 
-    db: Session = Depends(get_db)
+    config: ModelConfigUpdate
 ):
-    updated = ModelConfigService.update(db, config_id, config)
+    updated = await ModelConfigService.update(config_id, config)
     if not updated:
         raise HTTPException(status_code=404, detail="模型配置不存在")
     return updated
@@ -206,13 +201,13 @@ def update_model_config(
 
 @router.delete("/model-configs/{config_id}")
 @limiter.limit("20/minute")
-def delete_model_config(request: Request, config_id: int, db: Session = Depends(get_db)):
-    if not ModelConfigService.delete(db, config_id):
+async def delete_model_config(request: Request, config_id: int):
+    if not await ModelConfigService.delete(config_id):
         raise HTTPException(status_code=404, detail="模型配置不存在")
     return {"message": "删除成功"}
 
 
 @router.get("/health")
 @limiter.limit("60/minute")
-def health_check(request: Request):
+async def health_check(request: Request):
     return {"status": "ok", "message": "苏格拉底AI教学系统运行中"}

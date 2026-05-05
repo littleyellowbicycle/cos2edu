@@ -1,21 +1,27 @@
 from fastapi import FastAPI, Request, status
-from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
-from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-import os
+import time
+import uuid
 
 from app.core.config import settings
 from app.core.database import init_db
 from app.core.limiter import limiter
-from app.api import api_router, chat_router, pages_router, upload_router
+from app.core.logging_config import setup_logging, get_logger
+from app.api import api_router
+
+logger = get_logger(__name__)
+access_logger = get_logger("access")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    init_db()
+    setup_logging(level=settings.LOG_LEVEL)
+    logger.info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
+    logger.info(f"Debug mode: {settings.DEBUG}")
+    await init_db()
     yield
 
 
@@ -26,7 +32,57 @@ app = FastAPI(
 )
 
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    request_id = str(uuid.uuid4())[:8]
+    request.state.request_id = request_id
+    
+    start_time = time.perf_counter()
+    client_ip = get_client_ip(request)
+    method = request.method
+    path = request.url.path
+    query_string = request.url.query
+    full_path = f"{path}?{query_string}" if query_string else path
+    
+    access_logger.info(
+        f"[{request_id}] REQUEST - {client_ip} - {method} {full_path} - "
+        f"User-Agent: {request.headers.get('user-agent', 'N/A')}"
+    )
+    
+    try:
+        response = await call_next(request)
+        process_time = (time.perf_counter() - start_time) * 1000
+        
+        access_logger.info(
+            f"[{request_id}] RESPONSE - {client_ip} - {method} {full_path} - "
+            f"Status: {response.status_code} - Duration: {process_time:.2f}ms"
+        )
+        
+        return response
+    except Exception as e:
+        process_time = (time.perf_counter() - start_time) * 1000
+        access_logger.error(
+            f"[{request_id}] ERROR - {client_ip} - {method} {full_path} - "
+            f"Error: {type(e).__name__}: {str(e)} - Duration: {process_time:.2f}ms",
+            exc_info=True
+        )
+        raise
+
+
+def get_client_ip(request: Request) -> str:
+    forwarded_for = request.headers.get("x-forwarded-for")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+    
+    x_real_ip = request.headers.get("x-real-ip")
+    if x_real_ip:
+        return x_real_ip
+    
+    if request.client:
+        return request.client.host
+    return "unknown"
 
 
 @app.exception_handler(RateLimitExceeded)
@@ -48,13 +104,7 @@ app.add_middleware(
     allow_headers=settings.CORS_ALLOW_HEADERS,
 )
 
-static_dir = os.path.join(os.path.dirname(__file__), "static")
-app.mount("/static", StaticFiles(directory=static_dir), name="static")
-
-app.include_router(pages_router, tags=["pages"])
-app.include_router(api_router, prefix="/api", tags=["api"])
-app.include_router(chat_router, prefix="/api", tags=["chat"])
-app.include_router(upload_router, prefix="/api", tags=["upload"])
+app.include_router(api_router, prefix="/api/v1", tags=["api-v1"])
 
 
 @app.get("/health")

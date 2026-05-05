@@ -1,14 +1,2 @@
-fastapi
-uvicorn
-pydantic
-pydantic-settings
-python-multipart
-openai
-anthropic
-sqlalchemy
-aiofiles
-jinja2
-python-dotenv
-httpx
-slowapi
-limits
+-r requirements-prod.txt
+-r requirements-dev.txt
