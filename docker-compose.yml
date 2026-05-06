@@ -8,6 +8,7 @@ networks:
         - subnet: 172.28.0.0/16
 
 volumes:
+  postgres_data:
   redis_data:
 
 x-logging: &default-logging
@@ -25,44 +26,52 @@ x-resources: &default-resources
     nproc: 65535
 
 services:
-  cos2edu:
+  nginx:
     build:
-      context: .
+      context: ./frontend
       dockerfile: Dockerfile
-      args:
-        UID: ${UID:-1000}
-        GID: ${GID:-1000}
-    container_name: cos2edu-app
+    container_name: cos2edu-nginx
     ports:
-      - "${APP_PORT:-8000}:8000"
+      - "80:80"
     volumes:
-      - ./data:/app/data
-      - ./.env:/app/.env:ro
-    environment:
-      - APP_ENV=${APP_ENV:-prod}
-      - HOST=0.0.0.0
-      - PORT=8000
-    restart: unless-stopped
+      - ./shared/data:/usr/share/nginx/html/uploads
+    depends_on:
+      - backend
     networks:
       - cos2edu-network
     logging: *default-logging
-    <<: *default-resources
+    restart: unless-stopped
+    profiles:
+      - frontend
+      - all
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cos2edu-backend
+    volumes:
+      - ./shared/data:/shared/data
+      - ./backend/.env:/app/.env:ro
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-sqlite+aiosqlite:///./data/cos2edu.db}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+      - APP_ENV=${APP_ENV:-prod}
+      - DEBUG=${DEBUG:-false}
+    networks:
+      - cos2edu-network
+    logging: *default-logging
+    restart: unless-stopped
     deploy:
       resources:
         limits:
           cpus: '2.0'
-          memory: 1G
+          memory: 2G
         reservations:
-          cpus: '0.25'
-          memory: 256M
-    healthcheck:
-      test: ["CMD", "python", "-c", "import http.client; conn = http.client.HTTPConnection('localhost', 8000); conn.request('GET', '/health'); r = conn.getresponse(); print(r.read().decode() if r.status == 200 else 'FAIL'); conn.close()"]
-      interval: 30s
-      timeout: 10s
-      start_period: 120s
-      retries: 3
+          cpus: '0.5'
+          memory: 512M
     profiles:
-      - app
+      - backend
       - all
 
   redis:
@@ -73,19 +82,15 @@ services:
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
-    restart: unless-stopped
     networks:
       - cos2edu-network
     logging: *default-logging
-    <<: *default-resources
+    restart: unless-stopped
     deploy:
       resources:
         limits:
           cpus: '1.0'
           memory: 512M
-        reservations:
-          cpus: '0.1'
-          memory: 64M
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -94,4 +99,26 @@ services:
       retries: 3
     profiles:
       - redis
+      - all
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: cos2edu-postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=${DB_USER:-cos2edu}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-password}
+      - POSTGRES_DB=${DB_NAME:-cos2edu}
+    networks:
+      - cos2edu-network
+    logging: *default-logging
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+    profiles:
+      - postgres
       - all

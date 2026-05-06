@@ -21,6 +21,11 @@ class BaseConfig(BaseSettings):
     UPLOADS_DIR: str = "./data/uploads"
     AVATARS_DIR: str = "./data/uploads/avatars"
     BACKGROUNDS_DIR: str = "./data/uploads/backgrounds"
+
+    class Config:
+        env_file = ".env"
+        case_sensitive = True
+        extra = "ignore"
     
     MAX_UPLOAD_SIZE: int = 10 * 1024 * 1024
     ALLOWED_IMAGE_TYPES: List[str] = ["image/jpeg", "image/png", "image/gif", "image/webp"]
@@ -112,24 +117,12 @@ class DevConfig(BaseConfig):
     ]
     CORS_ALLOW_METHODS: List[str] = ["*"]
     
-    DATABASE_URL: str = "sqlite+aiosqlite:///./data/app_dev.db"
-    
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
-        extra = "ignore"
+    DATABASE_URL: str = "sqlite+aiosqlite:///./data/app.db"
 
 
 class ProdConfig(BaseConfig):
     DEBUG: bool = False
     LOG_LEVEL: str = "INFO"
-    
-    DATABASE_URL: str = "sqlite+aiosqlite:///./data/app_prod.db"
-    
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
-        extra = "ignore"
 
 
 class TestConfig(BaseConfig):

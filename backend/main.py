@@ -5,6 +5,8 @@ from contextlib import asynccontextmanager
 from slowapi.errors import RateLimitExceeded
 import time
 import uuid
+import sys
+import os
 
 from app.core.config import settings
 from app.core.database import init_db
@@ -38,28 +40,28 @@ app.state.limiter = limiter
 async def log_requests(request: Request, call_next):
     request_id = str(uuid.uuid4())[:8]
     request.state.request_id = request_id
-    
+
     start_time = time.perf_counter()
     client_ip = get_client_ip(request)
     method = request.method
     path = request.url.path
     query_string = request.url.query
     full_path = f"{path}?{query_string}" if query_string else path
-    
+
     access_logger.info(
         f"[{request_id}] REQUEST - {client_ip} - {method} {full_path} - "
         f"User-Agent: {request.headers.get('user-agent', 'N/A')}"
     )
-    
+
     try:
         response = await call_next(request)
         process_time = (time.perf_counter() - start_time) * 1000
-        
+
         access_logger.info(
             f"[{request_id}] RESPONSE - {client_ip} - {method} {full_path} - "
             f"Status: {response.status_code} - Duration: {process_time:.2f}ms"
         )
-        
+
         return response
     except Exception as e:
         process_time = (time.perf_counter() - start_time) * 1000
@@ -75,11 +77,11 @@ def get_client_ip(request: Request) -> str:
     forwarded_for = request.headers.get("x-forwarded-for")
     if forwarded_for:
         return forwarded_for.split(",")[0].strip()
-    
+
     x_real_ip = request.headers.get("x-real-ip")
     if x_real_ip:
         return x_real_ip
-    
+
     if request.client:
         return request.client.host
     return "unknown"
@@ -88,7 +90,7 @@ def get_client_ip(request: Request) -> str:
 @app.exception_handler(RateLimitExceeded)
 async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
     return JSONResponse(
-        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        status_code=status.HTTP_429_TOO_M_MANY_REQUESTS,
         content={
             "detail": "请求过于频繁，请稍后再试",
             "retry_after": str(exc.headers.get("Retry-After", "60"))
