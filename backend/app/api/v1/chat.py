@@ -99,7 +99,7 @@ async def acquire_concurrency_lock(client_id: str, conversation_id: int, lock_ty
 async def get_model_config(db: AsyncSession, model_config_id: Optional[int]):
     """获取模型配置
     
-    根据配置 ID 获取模型配置，如果未提供 ID 则返回 None。
+    根据配置 ID 获取模型配置，如果未提供 ID 则返回默认配置。
     
     Args:
         db: 数据库会话
@@ -109,8 +109,8 @@ async def get_model_config(db: AsyncSession, model_config_id: Optional[int]):
         ModelConfig 对象或 None
     """
     if model_config_id:
-        return await ModelConfigService.get_by_id(db, model_config_id)
-    return None
+        return await ModelConfigService.get_by_id(model_config_id)
+    return await ModelConfigService.get_default()
 
 
 # ============================================================================
@@ -149,6 +149,8 @@ async def chat(
     try:
         async with AsyncSessionLocal() as db:
             model_config = await get_model_config(db, model_config_id)
+            if model_config is None:
+                model_config = await get_model_config(db, get_default_model_config())
             
             response = await ChatService.chat(
                 db=db,

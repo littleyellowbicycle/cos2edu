@@ -11,6 +11,7 @@ class ModelConfig(Base):
     model_name = Column(String(100), nullable=False)
     api_key = Column(String(255), nullable=True)
     base_url = Column(String(255), nullable=True)
+    group_id = Column(String(100), nullable=True)
     is_default = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)

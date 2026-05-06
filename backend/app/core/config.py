@@ -56,6 +56,9 @@ class BaseConfig(BaseSettings):
     GEMINI_API_KEY: Optional[str] = None
     GEMINI_BASE_URL: Optional[str] = None
     
+    MINIMAX_API_KEY: Optional[str] = None
+    MINIMAX_GROUP_ID: Optional[str] = None
+    
     REDIS_URL: Optional[str] = None
     REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379

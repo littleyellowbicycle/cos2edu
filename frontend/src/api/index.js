@@ -51,6 +51,13 @@ export default {
     update: (id, data) => apiClient.put(`/crud/conversations/${id}`, data),
     delete: (id) => apiClient.delete(`/crud/conversations/${id}`)
   },
+  modelConfigs: {
+    getAll: () => apiClient.get('/crud/model-configs'),
+    getById: (id) => apiClient.get(`/crud/model-configs/${id}`),
+    create: (data) => apiClient.post('/crud/model-configs', data),
+    update: (id, data) => apiClient.put(`/crud/model-configs/${id}`, data),
+    delete: (id) => apiClient.delete(`/crud/model-configs/${id}`)
+  },
   chat: {
     stream: (conversationId, message) => {
       return new EventSource(`/api/v1/chat/${conversationId}/stream?message=${encodeURIComponent(message)}`)

@@ -13,43 +13,150 @@ from app.repositories.unit_of_work import UnitOfWork
 logger = get_logger(__name__)
 
 
+PROVIDER_DEFAULTS = {
+    "openai": {
+        "base_url": "https://api.openai.com/v1",
+        "model": "gpt-4o"
+    },
+    "anthropic": {
+        "base_url": "https://api.anthropic.com",
+        "model": "claude-3-opus-20240229"
+    },
+    "dashscope": {
+        "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "model": "qwen-plus"
+    },
+    "zhipu": {
+        "base_url": "https://open.bigmodel.cn/api/paas/v4",
+        "model": "glm-4"
+    },
+    "doubao": {
+        "base_url": "https://ark.cn-beijing.volces.com/api/v3",
+        "model": "doubao-pro-32k"
+    },
+    "wenxin": {
+        "base_url": "https://qianfan.baidubce.com/v2",
+        "model": "ernie-4.0-8k-latest"
+    },
+    "hunyuan": {
+        "base_url": "https://api.hunyuan.cloud.tencent.com",
+        "model": "hunyuan-pro"
+    },
+    "moonshot": {
+        "base_url": "https://api.moonshot.cn/v1",
+        "model": "moonshot-v1-8k"
+    },
+    "gemini": {
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+        "model": "gemini-1.5-pro"
+    },
+    "minimax": {
+        "base_url": "https://api.minimax.chat/v1",
+        "model": "MiniMax-M2.7"
+    }
+}
+
+
 class LLMProvider:
     def __init__(self, model_config: Optional[Dict[str, Any]] = None):
         self.model_config = model_config or {}
         self.provider = self.model_config.get("provider", settings.DEFAULT_PROVIDER)
-        self.model_name = self.model_config.get("model_name", settings.DEFAULT_MODEL)
+        self.model_name = self.model_config.get("model_name") or PROVIDER_DEFAULTS.get(self.provider, {}).get("model") or settings.DEFAULT_MODEL
         self.api_key = self.model_config.get("api_key") or settings.OPENAI_API_KEY
-        self.base_url = self.model_config.get("base_url") or settings.OPENAI_BASE_URL
+        self.base_url = self.model_config.get("base_url") or PROVIDER_DEFAULTS.get(self.provider, {}).get("base_url") or settings.OPENAI_BASE_URL
+        self.group_id = self.model_config.get("group_id") or getattr(settings, 'MINIMAX_GROUP_ID', None)
+
+    def _validate_config(self):
+        if not self.api_key or self.api_key in ("your-openai-api-key", ""):
+            raise ValueError(f"请先配置 {self.provider} 的 API Key。访问 /settings 页面进行设置。")
+        if not self.model_name:
+            raise ValueError("请先选择 AI 模型。访问 /settings 页面进行设置。")
 
     def _get_client(self):
+        extra_headers = {}
+        
         if self.provider == "openai":
-            return AsyncOpenAI(api_key=self.api_key, base_url=self.base_url)
+            return AsyncOpenAI(api_key=self.api_key, base_url=self.base_url or "https://api.openai.com/v1")
         elif self.provider == "anthropic":
-            return AsyncAnthropic(api_key=self.api_key)
+            return AsyncAnthropic(api_key=self.api_key, base_url=self.base_url or "https://api.anthropic.com")
+        elif self.provider == "minimax":
+            return AsyncOpenAI(
+                api_key=self.api_key, 
+                base_url=self.base_url or "https://api.minimax.chat/v1"
+            )
         else:
-            return AsyncOpenAI(api_key=self.api_key)
+            return AsyncOpenAI(api_key=self.api_key, base_url=self.base_url)
 
     async def chat(self, messages: List[Dict[str, str]]) -> str:
+        self._validate_config()
         client = self._get_client()
-        if self.provider == "openai":
-            response = await client.chat.completions.create(
-                model=self.model_name,
-                messages=messages
-            )
-            return response.choices[0].message.content
-        elif self.provider == "anthropic":
-            response = await client.messages.create(
-                model=self.model_name,
-                max_tokens=1024,
-                messages=messages
-            )
-            return response.content[0].text
-        else:
-            raise ValueError(f"Unsupported provider: {self.provider}")
+        
+        try:
+            if self.provider == "anthropic":
+                ant_messages = [{"role": m["role"] if m["role"] != "system" else "user", "content": m["content"]} for m in messages]
+                system_msg = next((m["content"] for m in messages if m["role"] == "system"), None)
+                response = await client.messages.create(
+                    model=self.model_name,
+                    max_tokens=1024,
+                    system=system_msg,
+                    messages=ant_messages
+                )
+                return response.content[0].text
+            else:
+                response = await client.chat.completions.create(
+                    model=self.model_name,
+                    messages=messages
+                )
+                return response.choices[0].message.content
+        except Exception as e:
+            logger.error(f"LLM chat error [{self.provider}]: {str(e)}")
+            raise
 
     async def chat_stream(self, messages: List[Dict[str, str]]) -> AsyncIterator[str]:
+        self._validate_config()
         client = self._get_client()
-        if self.provider == "openai":
+        
+        try:
+            if self.provider == "anthropic":
+                ant_messages = [{"role": m["role"] if m["role"] != "system" else "user", "content": m["content"]} for m in messages]
+                system_msg = next((m["content"] for m in messages if m["role"] == "system"), None)
+                stream = await client.messages.create(
+                    model=self.model_name,
+                    max_tokens=1024,
+                    system=system_msg,
+                    messages=ant_messages,
+                    stream=True
+                )
+                async for chunk in stream:
+                    if chunk.type == "content_block_delta" and hasattr(chunk, 'delta'):
+                        yield chunk.delta.text
+            else:
+                stream = await client.chat.completions.create(
+                    model=self.model_name,
+                    messages=messages,
+                    stream=True
+                )
+                async for chunk in stream:
+                    if chunk.choices[0].delta.content:
+                        yield chunk.choices[0].delta.content
+        except Exception as e:
+            logger.error(f"LLM stream error [{self.provider}]: {str(e)}")
+            raise
+        
+        if self.provider == "anthropic":
+            ant_messages = [{"role": m["role"] if m["role"] != "system" else "user", "content": m["content"]} for m in messages]
+            system_msg = next((m["content"] for m in messages if m["role"] == "system"), None)
+            stream = await client.messages.create(
+                model=self.model_name,
+                max_tokens=1024,
+                system=system_msg,
+                messages=ant_messages,
+                stream=True
+            )
+            async for chunk in stream:
+                if chunk.type == "content_block_delta" and hasattr(chunk, 'delta'):
+                    yield chunk.delta.text
+        else:
             stream = await client.chat.completions.create(
                 model=self.model_name,
                 messages=messages,
@@ -58,18 +165,6 @@ class LLMProvider:
             async for chunk in stream:
                 if chunk.choices[0].delta.content:
                     yield chunk.choices[0].delta.content
-        elif self.provider == "anthropic":
-            stream = await client.messages.create(
-                model=self.model_name,
-                max_tokens=1024,
-                messages=messages,
-                stream=True
-            )
-            async for chunk in stream:
-                if chunk.type == "content_block_delta" and hasattr(chunk, 'delta'):
-                    yield chunk.delta.text
-        else:
-            raise ValueError(f"Unsupported provider: {self.provider}")
 
 
 class ChatService:
@@ -99,7 +194,8 @@ class ChatService:
                     "provider": model_config.provider,
                     "model_name": model_config.model_name,
                     "api_key": model_config.api_key,
-                    "base_url": model_config.base_url
+                    "base_url": model_config.base_url,
+                    "group_id": getattr(model_config, 'group_id', None)
                 }
 
             llm = LLMProvider(config_dict)
@@ -139,7 +235,8 @@ class ChatService:
                     "provider": model_config.provider,
                     "model_name": model_config.model_name,
                     "api_key": model_config.api_key,
-                    "base_url": model_config.base_url
+                    "base_url": model_config.base_url,
+                    "group_id": getattr(model_config, 'group_id', None)
                 }
 
             llm = LLMProvider(config_dict)

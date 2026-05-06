@@ -30,13 +30,14 @@ class ProviderType(str, Enum):
     HUNYUAN = "hunyuan"
     MOONSHOT = "moonshot"
     GEMINI = "gemini"
+    MINIMAX = "minimax"
     CUSTOM = "custom"
 
 
 class CharacterBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100, description="角色名称")
     description: Optional[str] = Field(None, max_length=500, description="角色描述")
-    personality: str = Field(..., min_length=1, max_length=2000, description="角色性格设定")
+    personality: str = Field(default="善良且乐于助人", max_length=2000, description="角色性格设定")
     background: Optional[str] = Field(None, max_length=2000, description="角色背景故事")
     avatar: Optional[str] = Field(None, max_length=500, description="头像路径或表情")
     avatar_type: str = Field(default="emoji", description="头像类型")
@@ -194,6 +195,7 @@ class ModelConfigBase(BaseModel):
     model_name: str = Field(..., min_length=1, max_length=100, description="模型名称")
     api_key: Optional[str] = Field(None, max_length=500, description="API密钥")
     base_url: Optional[str] = Field(None, max_length=500, description="API基地址")
+    group_id: Optional[str] = Field(None, max_length=100, description="Group ID (MiniMax等需要)")
     is_default: bool = Field(default=False, description="是否为默认配置")
 
     @field_validator("provider")
@@ -229,6 +231,7 @@ class ModelConfigUpdate(BaseModel):
     model_name: Optional[str] = Field(None, min_length=1, max_length=100)
     api_key: Optional[str] = Field(None, max_length=500)
     base_url: Optional[str] = Field(None, max_length=500)
+    group_id: Optional[str] = Field(None, max_length=100)
     is_default: Optional[bool] = None
     is_active: Optional[bool] = None
 

@@ -1,7 +1,7 @@
 from typing import List, Optional
 from sqlalchemy import select, update, delete, func
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
 from models.conversation import Conversation
 from models.message import Message
 from .base import BaseRepository
@@ -14,7 +14,6 @@ class ConversationRepository(BaseRepository[Conversation]):
     async def get_all(self, skip: int = 0, limit: int = 100) -> List[Conversation]:
         result = await self.session.execute(
             select(Conversation)
-            .options(joinedload(Conversation.character), joinedload(Conversation.material))
             .order_by(Conversation.updated_at.desc())
             .offset(skip)
             .limit(limit)
@@ -24,10 +23,10 @@ class ConversationRepository(BaseRepository[Conversation]):
     async def get_by_id(self, id: int) -> Optional[Conversation]:
         result = await self.session.execute(
             select(Conversation)
-            .options(joinedload(Conversation.character), joinedload(Conversation.material), joinedload(Conversation.messages))
+            .options(selectinload(Conversation.character), selectinload(Conversation.material))
             .filter(Conversation.id == id)
         )
-        return result.unique().scalar_one_or_none()
+        return result.scalar_one_or_none()
 
     async def save_summary(
         self,

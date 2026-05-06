@@ -1,5 +1,8 @@
-from typing import List
+from typing import List, Optional
+from datetime import datetime
 from fastapi import APIRouter, HTTPException, Request
+from pydantic import BaseModel
+
 from app.core.limiter import limiter
 from app.schemas import (
     CharacterCreate, CharacterUpdate, CharacterResponse,
@@ -13,6 +16,29 @@ from app.services import (
     CharacterService, MaterialService,
     ConversationService, MessageService, ModelConfigService
 )
+
+
+router = APIRouter()
+
+
+class TestConfigRequest(BaseModel):
+    provider: str
+    model: str
+    api_key: str
+    base_url: Optional[str] = None
+
+
+class CreateConversationResponse(BaseModel):
+    id: int
+    title: Optional[str] = None
+    character_id: Optional[int] = None
+    material_id: Optional[int] = None
+    teaching_mode: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
 
 
 router = APIRouter()
@@ -102,7 +128,7 @@ async def delete_material(request: Request, material_id: int):
     return {"message": "删除成功"}
 
 
-@router.get("/conversations", response_model=List[ConversationResponse])
+@router.get("/conversations", response_model=List[CreateConversationResponse])
 @limiter.limit("60/minute")
 async def get_conversations(request: Request):
     return await ConversationService.get_all()
@@ -138,13 +164,13 @@ async def get_conversation(request: Request, conversation_id: int):
     }
 
 
-@router.post("/conversations", response_model=ConversationResponse)
+@router.post("/conversations", response_model=CreateConversationResponse)
 @limiter.limit("30/minute")
 async def create_conversation(request: Request, conversation: ConversationCreate):
     return await ConversationService.create(conversation)
 
 
-@router.put("/conversations/{conversation_id}", response_model=ConversationResponse)
+@router.put("/conversations/{conversation_id}", response_model=CreateConversationResponse)
 @limiter.limit("30/minute")
 async def update_conversation(
     request: Request,
@@ -211,3 +237,24 @@ async def delete_model_config(request: Request, config_id: int):
 @limiter.limit("60/minute")
 async def health_check(request: Request):
     return {"status": "ok", "message": "苏格拉底AI教学系统运行中"}
+
+
+@router.post("/ai/test")
+@limiter.limit("10/minute")
+async def test_ai_connection(request: Request, config: TestConfigRequest):
+    from app.services.chat_service import LLMProvider
+    
+    try:
+        provider = LLMProvider({
+            "provider": config.provider,
+            "model_name": config.model,
+            "api_key": config.api_key,
+            "base_url": config.base_url
+        })
+        
+        test_messages = [{"role": "user", "content": "Hi"}]
+        response = await provider.chat(test_messages)
+        
+        return {"success": True, "response": response[:100]}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
