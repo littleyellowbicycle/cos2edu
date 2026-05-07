@@ -78,13 +78,51 @@
           ></textarea>
         </div>
         <div class="form-group">
+          <label>内容类型</label>
+          <div class="content-type-tabs">
+            <button type="button" :class="{ active: form.content_type === 'text' }" @click="form.content_type = 'text'">文本</button>
+            <button type="button" :class="{ active: form.content_type === 'url' }" @click="form.content_type = 'url'">网络链接</button>
+          </div>
+        </div>
+        <div class="form-group" v-if="form.content_type === 'text'">
           <label for="content">内容</label>
-          <textarea 
-            id="content" 
-            v-model="form.content" 
-            placeholder="教材正文内容"
-            rows="8"
-          ></textarea>
+          <div class="file-upload-area">
+            <div v-if="uploadedFileName" class="file-preview">
+              <div class="file-preview-header">
+                <span class="file-icon">📄</span>
+                <span class="file-preview-name">{{ uploadedFileName }}</span>
+                <button type="button" class="file-remove" @click="removeUploadedFile">✕</button>
+              </div>
+              <div class="file-preview-content">{{ form.content }}</div>
+            </div>
+            <div v-else class="file-upload-zone">
+              <textarea 
+                id="content" 
+                v-model="form.content" 
+                placeholder="输入教材正文内容"
+                rows="8"
+              ></textarea>
+              <div class="file-upload-divider">或</div>
+              <label class="file-upload-btn">
+                <input 
+                  type="file" 
+                  accept=".txt,.md,.markdown,.text" 
+                  @change="handleFileUpload" 
+                  style="display: none;"
+                />
+                <span>📄 上传文本文件</span>
+              </label>
+            </div>
+          </div>
+        </div>
+        <div class="form-group" v-else>
+          <label for="contentUrl">内容链接</label>
+          <input 
+            id="contentUrl" 
+            v-model="form.content_url" 
+            type="url" 
+            placeholder="https://..."
+          />
         </div>
       </form>
       <template #footer>
@@ -112,8 +150,32 @@ const loading = ref(true)
 const form = ref({
   title: '',
   description: '',
-  content: ''
+  content_type: 'text',
+  content: '',
+  content_url: ''
 })
+
+const uploadedFileName = ref('')
+
+function handleFileUpload(event) {
+  const file = event.target.files[0]
+  if (!file) return
+  
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    form.value.content = e.target.result
+    uploadedFileName.value = file.name
+  }
+  reader.onerror = () => {
+    ElMessage.error('文件读取失败')
+  }
+  reader.readAsText(file)
+}
+
+function removeUploadedFile() {
+  form.value.content = ''
+  uploadedFileName.value = ''
+}
 
 onMounted(async () => {
   try {
@@ -151,8 +213,11 @@ function editMaterial(mat) {
   form.value = {
     title: mat.title,
     description: mat.description || '',
-    content: mat.content || ''
+    content_type: mat.content_type || 'text',
+    content: mat.content || '',
+    content_url: mat.content_url || ''
   }
+  uploadedFileName.value = ''
   showCreateDialog.value = true
 }
 
@@ -169,7 +234,8 @@ async function deleteMaterial(id) {
 function closeDialog() {
   showCreateDialog.value = false
   editingMaterial.value = null
-  form.value = { title: '', description: '', content: '' }
+  form.value = { title: '', description: '', content_type: 'text', content: '', content_url: '' }
+  uploadedFileName.value = ''
 }
 </script>
 
@@ -446,6 +512,29 @@ function closeDialog() {
   transition: border-color 0.2s;
 }
 
+.content-type-tabs {
+  display: flex;
+  gap: 8px;
+}
+
+.content-type-tabs button {
+  flex: 1;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.content-type-tabs button.active {
+  background: var(--color-ink);
+  color: white;
+  border-color: var(--color-ink);
+}
+
 .form-group input:focus,
 .form-group textarea:focus {
   outline: none;
@@ -455,6 +544,115 @@ function closeDialog() {
 .form-group textarea {
   resize: vertical;
   min-height: 100px;
+}
+
+.file-upload-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.file-upload-area {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.file-upload-zone {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.file-upload-divider {
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+.file-upload-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.file-upload-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--color-text);
+  transition: all 0.2s;
+}
+
+.file-upload-btn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.file-preview {
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.file-preview-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--color-bg-warm);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.file-icon {
+  font-size: 16px;
+}
+
+.file-preview-name {
+  flex: 1;
+  font-size: 14px;
+  color: var(--color-text);
+}
+
+.file-remove {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+.file-remove:hover {
+  background: var(--color-border);
+  color: var(--color-ink);
+}
+
+.file-preview-content {
+  padding: 14px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--color-text);
+  max-height: 200px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  background: var(--color-bg);
+}
+
+.file-name {
+  font-size: 13px;
+  color: var(--color-text-muted);
 }
 
 .btn-cancel,

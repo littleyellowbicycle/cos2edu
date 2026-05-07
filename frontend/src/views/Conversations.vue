@@ -34,9 +34,22 @@
           :style="{ animationDelay: `${index * 60}ms` }"
         >
           <div class="conversation-info">
-            <div class="conv-avatar">{{ conv.character_name?.charAt(0) || '?' }}</div>
+            <div class="conv-avatar" :style="getAvatarStyle(conv)">{{ getAvatarDisplay(conv) }}</div>
             <div class="conv-details">
-              <h3 class="conv-title">{{ conv.title || '未命名对话' }}</h3>
+              <div class="conv-title-wrapper" @click="startEditTitle(conv)" v-if="editingConvId !== conv.id">
+                <h3 class="conv-title">{{ conv.title || '未命名对话' }}</h3>
+                <span class="edit-icon">✎</span>
+              </div>
+              <div class="conv-title-edit" v-else>
+                <input 
+                  v-model="editingTitle" 
+                  @keyup.enter="saveTitle(conv)" 
+                  @keyup.escape="cancelEditTitle"
+                  @blur="saveTitle(conv)"
+                  ref="titleInput"
+                  class="title-input"
+                />
+              </div>
               <p class="conv-meta">
                 <span class="conv-character">{{ conv.character_name || '未知角色' }}</span>
                 <span class="conv-date">{{ formatDate(conv.created_at) }}</span>
@@ -54,7 +67,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useConversationStore } from '@/stores/conversation'
 import { ElMessage } from 'element-plus'
@@ -63,6 +76,52 @@ const router = useRouter()
 const store = useConversationStore()
 const conversations = ref([])
 const loading = ref(true)
+const editingConvId = ref(null)
+const editingTitle = ref('')
+const titleInput = ref(null)
+
+function getAvatarDisplay(conv) {
+  if (conv.character_avatar_type === 'emoji' && conv.character_avatar) {
+    return conv.character_avatar
+  }
+  return conv.character_name ? conv.character_name.charAt(0) : '?'
+}
+
+function getAvatarStyle(conv) {
+  if (conv.character_avatar_type === 'image' && conv.character_avatar) {
+    return { backgroundImage: `url(${conv.character_avatar})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+  }
+  return {}
+}
+
+function startEditTitle(conv) {
+  editingConvId.value = conv.id
+  editingTitle.value = conv.title || ''
+  nextTick(() => {
+    if (titleInput.value) {
+      titleInput.value.focus()
+    }
+  })
+}
+
+async function saveTitle(conv) {
+  if (!editingTitle.value.trim()) {
+    cancelEditTitle()
+    return
+  }
+  try {
+    await store.update(conv.id, { title: editingTitle.value.trim() })
+    conv.title = editingTitle.value.trim()
+  } catch (e) {
+    console.error(e)
+  }
+  cancelEditTitle()
+}
+
+function cancelEditTitle() {
+  editingConvId.value = null
+  editingTitle.value = ''
+}
 
 onMounted(async () => {
   try {
@@ -227,6 +286,42 @@ function formatDate(dateStr) {
   display: flex;
   align-items: center;
   gap: 20px;
+}
+
+.conv-title-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.conv-title-wrapper:hover .edit-icon {
+  opacity: 1;
+}
+
+.edit-icon {
+  font-size: 14px;
+  color: var(--color-text-muted);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.conv-title-edit {
+  display: flex;
+  align-items: center;
+}
+
+.title-input {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--color-ink);
+  padding: 4px 8px;
+  border: 1px solid var(--color-accent);
+  border-radius: 4px;
+  background: var(--color-bg);
+  outline: none;
+  width: 200px;
 }
 
 .conv-avatar {

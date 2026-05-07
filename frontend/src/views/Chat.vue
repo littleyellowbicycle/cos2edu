@@ -32,17 +32,17 @@
           </div>
           
           <div 
-            v-for="(msg, index) in messages" 
+            v-for="(msg, index) in messages"
             :key="index"
             class="message"
             :class="msg.role"
             role="article"
           >
-            <div class="message-avatar" :aria-label="msg.role === 'user' ? '我' : 'AI助手'">
-              {{ msg.role === 'user' ? '我' : 'AI' }}
+            <div class="message-avatar" :style="msg.role === 'assistant' ? getAvatarStyle() : {}" :aria-label="msg.role === 'user' ? '我' : characterName">
+              {{ msg.role === 'user' ? '我' : getAvatarDisplay() }}
             </div>
             <div class="message-content">
-              <div class="message-text">{{ msg.content }}</div>
+              <div class="message-text" :ref="el => { if (el) messageRefs[msg.timestamp] = el }" v-html="getRenderedContent(msg)"></div>
               <div class="message-time" v-if="msg.timestamp" aria-label="发送时间">
                 {{ formatTime(msg.timestamp) }}
               </div>
@@ -50,7 +50,7 @@
           </div>
           
           <div v-if="isTyping" class="message assistant typing" role="status">
-            <div class="message-avatar" aria-hidden="true">AI</div>
+            <div class="message-avatar" :style="getAvatarStyle()" aria-hidden="true">{{ getAvatarDisplay() }}</div>
             <div class="message-content">
               <div class="message-text typing-indicator" aria-label="正在输入">
                 <span></span><span></span><span></span>
@@ -111,6 +111,76 @@ import { ref, onMounted, nextTick, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import api from '@/api'
 import { ElMessage } from 'element-plus'
+import katex from 'katex'
+import 'katex/dist/katex.min.css'
+import mermaid from 'mermaid'
+import { marked } from 'marked'
+
+marked.setOptions({
+  breaks: true,
+  gfm: true
+})
+
+function escapeHtml(text) {
+  const div = document.createElement('div')
+  div.textContent = text
+  return div.innerHTML
+}
+
+function renderLatex(text) {
+  text = text.replace(/\$\$(.*?)\$\$/gs, (_, math) => {
+    try {
+      return `<div class="math-block">${katex.renderToString(math, { displayMode: true, throwOnError: false })}</div>`
+    } catch (e) {
+      return `<div class="math-block math-error">${escapeHtml(math)}</div>`
+    }
+  })
+  text = text.replace(/\$(.*?)\$/g, (_, math) => {
+    try {
+      return katex.renderToString(math, { displayMode: false, throwOnError: false })
+    } catch (e) {
+      return `<span class="math-error">${escapeHtml(math)}</span>`
+    }
+  })
+  return text
+}
+
+function preprocessMarkdown(text) {
+  text = renderLatex(text)
+  return text
+}
+
+async function renderMermaid(element) {
+  const mermaidBlocks = element.querySelectorAll('pre.mermaid')
+  for (const block of mermaidBlocks) {
+    const code = block.textContent
+    try {
+      const id = 'mermaid-' + Math.random().toString(36).substr(2, 9)
+      const { svg } = await mermaid.render(id, code)
+      const wrapper = document.createElement('div')
+      wrapper.className = 'mermaid-svg'
+      wrapper.innerHTML = svg
+      block.replaceWith(wrapper)
+    } catch (e) {
+      block.className = 'mermaid-error'
+      block.textContent = code
+    }
+  }
+}
+
+function getRenderedContent(msg) {
+  if (!msg.content) return ''
+  let text = msg.content
+  text = preprocessMarkdown(text)
+  let html = marked.parse(text)
+  return html
+}
+
+mermaid.initialize({
+  startOnLoad: false,
+  theme: 'default',
+  securityLevel: 'loose'
+})
 
 const route = useRoute()
 const messages = ref([])
@@ -122,8 +192,25 @@ const inputTextarea = ref(null)
 const showSidebar = ref(false)
 const conversationId = ref(route.query.conversationId || null)
 const characterName = ref('')
+const characterAvatar = ref('')
+const characterAvatarType = ref('emoji')
 const conversationHistory = ref([])
 const loading = ref(false)
+const messageRefs = {}
+
+function getAvatarDisplay() {
+  if (characterAvatarType.value === 'emoji' && characterAvatar.value) {
+    return characterAvatar.value
+  }
+  return characterName.value ? characterName.value.charAt(0) : '?'
+}
+
+function getAvatarStyle() {
+  if (characterAvatarType.value === 'image' && characterAvatar.value) {
+    return { backgroundImage: `url(${characterAvatar.value})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+  }
+  return {}
+}
 
 onMounted(async () => {
   const characterId = route.params.id
@@ -136,6 +223,8 @@ onMounted(async () => {
   try {
     const character = await api.characters.getById(characterId)
     characterName.value = character.name
+    characterAvatar.value = character.avatar || ''
+    characterAvatarType.value = character.avatar_type || 'emoji'
   } catch (e) {
     console.error(e)
   }
@@ -148,11 +237,16 @@ onMounted(async () => {
   }
 })
 
-watch(messages, () => {
+watch(messages, async () => {
   nextTick(() => {
     if (messagesContainer.value) {
       messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
     }
+    Object.values(messageRefs).forEach(el => {
+      if (el) {
+        renderMermaid(el)
+      }
+    })
   })
 }, { deep: true })
 
@@ -180,9 +274,10 @@ async function sendMessage() {
       conversationId.value = conv.id
     }
 
-    const response = await fetch(`/api/v1/chat/${conversationId.value}/stream?message=${encodeURIComponent(userMessage)}`, {
+    const response = await fetch(`/api/v1/chat/${conversationId.value}/stream`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: userMessage })
     })
 
     if (!response.ok) {
@@ -192,6 +287,7 @@ async function sendMessage() {
     const reader = response.body.getReader()
     const decoder = new TextDecoder()
     let aiResponse = ''
+    let firstChunk = true
 
     messages.value.push({ role: 'assistant', content: '', timestamp: new Date() })
     const aiIndex = messages.value.length - 1
@@ -213,6 +309,10 @@ async function sendMessage() {
               hasError = true
               errorMsg = data.error
             } else if (data.content) {
+              if (firstChunk) {
+                isTyping.value = false
+                firstChunk = false
+              }
               aiResponse += data.content
               messages.value[aiIndex].content = aiResponse
             }
@@ -695,5 +795,124 @@ function formatDate(dateStr) {
     z-index: 100;
     box-shadow: var(--shadow-lg);
   }
+}
+
+.math-block {
+  margin: 12px 0;
+  overflow-x: auto;
+}
+
+.math-error {
+  color: #C75050;
+  background: #FEF2F2;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.mermaid-svg {
+  margin: 16px 0;
+  display: flex;
+  justify-content: center;
+}
+
+.mermaid-svg svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.mermaid-error {
+  background: #FEF2F2;
+  color: #C75050;
+  padding: 12px 16px;
+  border-radius: 4px;
+  border: 1px solid #FFCDD2;
+  font-family: monospace;
+  font-size: 13px;
+}
+
+.message-text code {
+  background: var(--color-bg-warm);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Fira Code', 'Monaco', monospace;
+  font-size: 0.9em;
+}
+
+.message-text h1,
+.message-text h2,
+.message-text h3,
+.message-text h4,
+.message-text h5,
+.message-text h6 {
+  margin: 16px 0 8px;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.message-text h1 { font-size: 1.5em; }
+.message-text h2 { font-size: 1.3em; }
+.message-text h3 { font-size: 1.1em; }
+
+.message-text p {
+  margin: 8px 0;
+  line-height: 1.6;
+}
+
+.message-text ul,
+.message-text ol {
+  margin: 8px 0;
+  padding-left: 24px;
+}
+
+.message-text li {
+  margin: 4px 0;
+}
+
+.message-text blockquote {
+  margin: 12px 0;
+  padding: 8px 16px;
+  border-left: 4px solid var(--color-accent);
+  background: var(--color-bg-warm);
+  color: var(--color-text-muted);
+}
+
+.message-text table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+}
+
+.message-text th,
+.message-text td {
+  border: 1px solid var(--color-border);
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.message-text th {
+  background: var(--color-bg-warm);
+  font-weight: 600;
+}
+
+.message-text hr {
+  border: none;
+  border-top: 1px solid var(--color-border);
+  margin: 16px 0;
+}
+
+.message-text a {
+  color: var(--color-accent);
+  text-decoration: underline;
+}
+
+.message-text a:hover {
+  color: var(--color-ink);
+}
+
+.message-text img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+  margin: 8px 0;
 }
 </style>

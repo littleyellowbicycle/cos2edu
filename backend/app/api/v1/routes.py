@@ -36,6 +36,9 @@ class CreateConversationResponse(BaseModel):
     teaching_mode: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    character_name: Optional[str] = None
+    character_avatar: Optional[str] = None
+    character_avatar_type: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -131,7 +134,31 @@ async def delete_material(request: Request, material_id: int):
 @router.get("/conversations", response_model=List[CreateConversationResponse])
 @limiter.limit("60/minute")
 async def get_conversations(request: Request):
-    return await ConversationService.get_all()
+    conversations = await ConversationService.get_all()
+    result = []
+    for conv in conversations:
+        char_name = None
+        char_avatar = None
+        char_avatar_type = None
+        if conv.character_id:
+            char = await CharacterService.get_by_id(conv.character_id)
+            if char:
+                char_name = char.name
+                char_avatar = char.avatar
+                char_avatar_type = char.avatar_type
+        result.append({
+            "id": conv.id,
+            "title": conv.title,
+            "character_id": conv.character_id,
+            "material_id": conv.material_id,
+            "teaching_mode": conv.teaching_mode,
+            "created_at": conv.created_at,
+            "updated_at": conv.updated_at,
+            "character_name": char_name,
+            "character_avatar": char_avatar,
+            "character_avatar_type": char_avatar_type
+        })
+    return result
 
 
 @router.get("/conversations/{conversation_id}", response_model=ConversationWithMessages)

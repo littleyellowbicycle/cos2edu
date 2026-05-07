@@ -38,7 +38,7 @@
           :style="{ animationDelay: `${index * 100}ms` }"
         >
           <div class="card-avatar">
-            <div class="avatar-placeholder">{{ char.name.charAt(0) }}</div>
+            <div class="avatar-placeholder" :style="getAvatarStyle(char)">{{ getAvatarDisplay(char) }}</div>
           </div>
           <div class="card-content">
             <h3 class="card-title">{{ char.name }}</h3>
@@ -63,6 +63,34 @@
       class="character-dialog"
     >
       <form @submit.prevent="handleSubmit" class="character-form">
+        <div class="form-group avatar-group">
+          <label>头像</label>
+          <div class="avatar-preview">
+            <div class="avatar-placeholder avatar-preview-img" :style="getAvatarStyle(form)">{{ getAvatarDisplay(form) }}</div>
+          </div>
+          <div class="avatar-type-tabs">
+            <button type="button" :class="{ active: form.avatar_type === 'emoji' }" @click="form.avatar_type = 'emoji'">Emoji</button>
+            <button type="button" :class="{ active: form.avatar_type === 'image' }" @click="form.avatar_type = 'image'">图片URL</button>
+          </div>
+          <div v-if="form.avatar_type === 'emoji'" class="emoji-picker">
+            <input 
+              v-model="form.avatar" 
+              type="text" 
+              placeholder="输入一个emoji，如: 😊"
+              maxlength="10"
+            />
+            <div class="emoji-suggestions">
+              <span v-for="e in emojiSuggestions" :key="e" @click="form.avatar = e" class="emoji-item">{{ e }}</span>
+            </div>
+          </div>
+          <div v-else class="image-url-input">
+            <input 
+              v-model="form.avatar" 
+              type="text" 
+              placeholder="输入图片URL，如: https://..."
+            />
+          </div>
+        </div>
         <div class="form-group">
           <label for="name">名称</label>
           <input 
@@ -128,8 +156,26 @@ const form = ref({
   name: '',
   description: '',
   personality: '',
-  background: ''
+  background: '',
+  avatar: '',
+  avatar_type: 'emoji'
 })
+
+const emojiSuggestions = ['😊', '😎', '🤔', '👍', '🎓', '📚', '💡', '🌟', '😃', '🤓', '🧐', '✨']
+
+function getAvatarDisplay(item) {
+  if (item.avatar_type === 'emoji' && item.avatar) {
+    return item.avatar
+  }
+  return item.name ? item.name.charAt(0) : '?'
+}
+
+function getAvatarStyle(item) {
+  if (item.avatar_type === 'image' && item.avatar) {
+    return { backgroundImage: `url(${item.avatar})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+  }
+  return {}
+}
 
 onMounted(async () => {
   try {
@@ -167,7 +213,9 @@ function editCharacter(char) {
     name: char.name,
     description: char.description || '',
     personality: char.personality || '',
-    background: char.background || ''
+    background: char.background || '',
+    avatar: char.avatar || '',
+    avatar_type: char.avatar_type || 'emoji'
   }
   showCreateDialog.value = true
 }
@@ -189,7 +237,7 @@ function startChat(char) {
 function closeDialog() {
   showCreateDialog.value = false
   editingCharacter.value = null
-  form.value = { name: '', description: '', personality: '', background: '' }
+  form.value = { name: '', description: '', personality: '', background: '', avatar: '', avatar_type: 'emoji' }
 }
 </script>
 
@@ -363,6 +411,98 @@ function closeDialog() {
   font-size: 32px;
   font-weight: 600;
   color: white;
+}
+
+.avatar-placeholder.avatar-preview-img {
+  background: none;
+}
+
+.avatar-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.avatar-preview {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+
+.avatar-preview .avatar-placeholder {
+  width: 96px;
+  height: 96px;
+  font-size: 48px;
+}
+
+.avatar-type-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.avatar-type-tabs button {
+  flex: 1;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.avatar-type-tabs button.active {
+  background: var(--color-ink);
+  color: white;
+  border-color: var(--color-ink);
+}
+
+.emoji-picker input {
+  width: 100%;
+  padding: 12px 16px;
+  font-size: 18px;
+  text-align: center;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.emoji-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.emoji-item {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  background: var(--color-bg-warm);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.emoji-item:hover {
+  background: var(--color-border);
+  transform: scale(1.1);
+}
+
+.image-url-input input {
+  width: 100%;
+  padding: 12px 16px;
+  font-size: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-bg);
+  color: var(--color-text);
 }
 
 .card-title {

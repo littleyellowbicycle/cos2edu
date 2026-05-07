@@ -118,7 +118,7 @@ async def get_model_config(db: AsyncSession, model_config_id: Optional[int]):
 # ============================================================================
 
 
-@router.post("/chat/{conversation_id}")
+@router.post("/{conversation_id}")
 @limiter.limit("20/minute")
 async def chat(
     request: Request,
@@ -149,8 +149,6 @@ async def chat(
     try:
         async with AsyncSessionLocal() as db:
             model_config = await get_model_config(db, model_config_id)
-            if model_config is None:
-                model_config = await get_model_config(db, get_default_model_config())
             
             response = await ChatService.chat(
                 db=db,
@@ -167,7 +165,7 @@ async def chat(
         await concurrency_lock.release(lock_key)
 
 
-@router.post("/chat/{conversation_id}/stream")
+@router.post("/{conversation_id}/stream")
 @limiter.limit("20/minute")
 async def chat_stream(
     request: Request,
@@ -203,11 +201,13 @@ async def chat_stream(
                 model_config = None
                 if model_config_id:
                     try:
-                        model_config = await ModelConfigService.get_by_id(db, model_config_id)
+                        model_config = await ModelConfigService.get_by_id(model_config_id)
                     except Exception as e:
                         yield f"data: {json.dumps({'error': f'获取模型配置失败: {str(e)}'}, ensure_ascii=False)}\n\n"
                         yield "data: [DONE]\n\n"
                         return
+                else:
+                    model_config = await ModelConfigService.get_default()
                 
                 try:
                     async for chunk in ChatService.chat_stream(

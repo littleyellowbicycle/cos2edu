@@ -200,6 +200,7 @@ class ChatService:
 
             llm = LLMProvider(config_dict)
             response = await llm.chat(messages)
+            response = ChatService._strip_think_tags(response)
 
             await uow.messages.create({
                 "conversation_id": conversation_id,
@@ -242,9 +243,37 @@ class ChatService:
             llm = LLMProvider(config_dict)
 
             full_response = ""
+            buffer = ""
+            
             async for chunk in llm.chat_stream(messages):
-                full_response += chunk
-                yield chunk
+                buffer += chunk
+                
+                while buffer:
+                    think_start = buffer.lower().find('<think>')
+                    think_end = buffer.lower().find('</think>')
+                    
+                    if think_start != -1 and think_end != -1:
+                        buffer = buffer[:think_start] + buffer[think_end + 6:]
+                    elif think_start != -1:
+                        to_send = buffer[:think_start]
+                        buffer = buffer[think_start + 9:]
+                        if to_send:
+                            full_response += to_send
+                            yield to_send
+                        break
+                    elif think_end != -1:
+                        buffer = buffer[think_end + 6:]
+                    else:
+                        full_response += buffer
+                        yield buffer
+                        buffer = ""
+                        break
+            
+            if buffer:
+                buffer = buffer.strip()
+                if buffer:
+                    full_response += buffer
+                    yield buffer
 
             await uow.messages.create({
                 "conversation_id": conversation_id,
@@ -252,6 +281,12 @@ class ChatService:
                 "content": full_response
             })
 
+    @staticmethod
+    def _strip_think_tags(content: str) -> str:
+        import re
+        content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL | re.IGNORECASE)
+        return content.strip()
+    
     @staticmethod
     async def _build_messages(conversation, user_message: str) -> List[Dict[str, str]]:
         messages = []
