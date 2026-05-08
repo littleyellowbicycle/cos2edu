@@ -78,14 +78,7 @@
           ></textarea>
         </div>
         <div class="form-group">
-          <label>内容类型</label>
-          <div class="content-type-tabs">
-            <button type="button" :class="{ active: form.content_type === 'text' }" @click="form.content_type = 'text'">文本</button>
-            <button type="button" :class="{ active: form.content_type === 'url' }" @click="form.content_type = 'url'">网络链接</button>
-          </div>
-        </div>
-        <div class="form-group" v-if="form.content_type === 'text'">
-          <label for="content">内容</label>
+          <label>教材文件</label>
           <div class="file-upload-area">
             <div v-if="uploadedFileName" class="file-preview">
               <div class="file-preview-header">
@@ -93,20 +86,12 @@
                 <span class="file-preview-name">{{ uploadedFileName }}</span>
                 <button type="button" class="file-remove" @click="removeUploadedFile">✕</button>
               </div>
-              <div class="file-preview-content">{{ form.content }}</div>
             </div>
             <div v-else class="file-upload-zone">
-              <textarea 
-                id="content" 
-                v-model="form.content" 
-                placeholder="输入教材正文内容"
-                rows="8"
-              ></textarea>
-              <div class="file-upload-divider">或</div>
               <label class="file-upload-btn">
                 <input 
                   type="file" 
-                  accept=".txt,.md,.markdown,.text" 
+                  accept=".txt,.md,.markdown,.text,.pdf" 
                   @change="handleFileUpload" 
                   style="display: none;"
                 />
@@ -115,19 +100,10 @@
             </div>
           </div>
         </div>
-        <div class="form-group" v-else>
-          <label for="contentUrl">内容链接</label>
-          <input 
-            id="contentUrl" 
-            v-model="form.content_url" 
-            type="url" 
-            placeholder="https://..."
-          />
-        </div>
       </form>
       <template #footer>
         <button class="btn-cancel" @click="closeDialog">取消</button>
-        <button class="btn-submit" @click="handleSubmit">
+        <button class="btn-submit" :disabled="!uploadedFileName && !editingMaterial" @click="handleSubmit">
           {{ editingMaterial ? '保存' : '添加' }}
         </button>
       </template>
@@ -150,30 +126,32 @@ const loading = ref(true)
 const form = ref({
   title: '',
   description: '',
-  content_type: 'text',
-  content: '',
   content_url: ''
 })
 
 const uploadedFileName = ref('')
 
-function handleFileUpload(event) {
+async function handleFileUpload(event) {
   const file = event.target.files[0]
   if (!file) return
   
-  const reader = new FileReader()
-  reader.onload = (e) => {
-    form.value.content = e.target.result
-    uploadedFileName.value = file.name
+  uploadedFileName.value = file.name
+  
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    
+    const data = await api.materials.upload(formData)
+    form.value.content_url = data.content_url || data.filename || ''
+    form.value.description = '概括生成中...'
+  } catch (e) {
+    console.error(e)
+    removeUploadedFile()
   }
-  reader.onerror = () => {
-    ElMessage.error('文件读取失败')
-  }
-  reader.readAsText(file)
 }
 
 function removeUploadedFile() {
-  form.value.content = ''
+  form.value.content_url = ''
   uploadedFileName.value = ''
 }
 
@@ -193,13 +171,21 @@ async function handleSubmit() {
     return
   }
   
+  if (!uploadedFileName.value && !editingMaterial.value) {
+    ElMessage.warning('请上传教材文件')
+    return
+  }
+  
   try {
     if (editingMaterial.value) {
       await api.materials.update(editingMaterial.value.id, form.value)
       ElMessage.success('教材已更新')
     } else {
-      await api.materials.create(form.value)
-      ElMessage.success('教材已添加')
+      const created = await api.materials.create(form.value)
+      ElMessage.success('教材已添加，概括生成中...')
+      if (created.id) {
+        api.materials.generateSummary(created.id).catch(console.error)
+      }
     }
     materials.value = await api.materials.getAll()
     closeDialog()
@@ -213,11 +199,9 @@ function editMaterial(mat) {
   form.value = {
     title: mat.title,
     description: mat.description || '',
-    content_type: mat.content_type || 'text',
-    content: mat.content || '',
     content_url: mat.content_url || ''
   }
-  uploadedFileName.value = ''
+  uploadedFileName.value = mat.content_url || mat.title || '已有文件'
   showCreateDialog.value = true
 }
 
@@ -234,7 +218,7 @@ async function deleteMaterial(id) {
 function closeDialog() {
   showCreateDialog.value = false
   editingMaterial.value = null
-  form.value = { title: '', description: '', content_type: 'text', content: '', content_url: '' }
+  form.value = { title: '', description: '', content_url: '' }
   uploadedFileName.value = ''
 }
 </script>
@@ -648,6 +632,13 @@ function closeDialog() {
   overflow-y: auto;
   white-space: pre-wrap;
   background: var(--color-bg);
+}
+
+.file-preview-loading {
+  padding: 14px;
+  font-size: 14px;
+  color: var(--color-text-muted);
+  text-align: center;
 }
 
 .file-name {

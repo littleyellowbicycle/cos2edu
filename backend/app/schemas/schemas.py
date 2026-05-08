@@ -56,9 +56,9 @@ class CharacterCreate(CharacterBase):
 
 
 class CharacterUpdate(BaseModel):
-    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    name: Optional[str] = Field(None, max_length=100)
     description: Optional[str] = Field(None, max_length=500)
-    personality: Optional[str] = Field(None, min_length=1, max_length=2000)
+    personality: Optional[str] = Field(None, max_length=2000)
     background: Optional[str] = Field(None, max_length=2000)
     avatar: Optional[str] = Field(None, max_length=500)
     avatar_type: Optional[str] = None

@@ -33,8 +33,12 @@ export default {
   characters: {
     getAll: () => apiClient.get('/crud/characters'),
     getById: (id) => apiClient.get(`/crud/characters/${id}`),
-    create: (data) => apiClient.post('/crud/characters', data),
-    update: (id, data) => apiClient.put(`/crud/characters/${id}`, data),
+    create: (data) => apiClient.post('/crud/characters/multipart', data, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    }),
+    update: (id, data) => apiClient.put(`/crud/characters/${id}/multipart`, data, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    }),
     delete: (id) => apiClient.delete(`/crud/characters/${id}`)
   },
   materials: {
@@ -42,7 +46,11 @@ export default {
     getById: (id) => apiClient.get(`/crud/materials/${id}`),
     create: (data) => apiClient.post('/crud/materials', data),
     update: (id, data) => apiClient.put(`/crud/materials/${id}`, data),
-    delete: (id) => apiClient.delete(`/crud/materials/${id}`)
+    delete: (id) => apiClient.delete(`/crud/materials/${id}`),
+    upload: (formData) => apiClient.post('/materials/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    }),
+    generateSummary: (id) => apiClient.post(`/materials/${id}/generate-summary`)
   },
   conversations: {
     getAll: () => apiClient.get('/crud/conversations'),

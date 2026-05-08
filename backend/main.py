@@ -12,6 +12,7 @@ from app.core.config import settings
 from app.core.database import init_db
 from app.core.limiter import limiter
 from app.core.logging_config import setup_logging, get_logger
+from app.core.static_files import setup_static_files, is_production_mode
 from app.api import api_router
 
 logger = get_logger(__name__)
@@ -23,6 +24,9 @@ async def lifespan(app: FastAPI):
     setup_logging(level=settings.LOG_LEVEL)
     logger.info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
     logger.info(f"Debug mode: {settings.DEBUG}")
+    logger.info(f"Production mode: {is_production_mode()}")
+    logger.info(f"Data directory: {settings.DATA_DIR}")
+    logger.info(f"Database: {settings.DATABASE_URL}")
     await init_db()
     yield
 
@@ -107,6 +111,13 @@ app.add_middleware(
 )
 
 app.include_router(api_router, prefix="/api/v1", tags=["api-v1"])
+
+setup_static_files(app)
+
+if settings.DEBUG:
+    @app.get("/")
+    async def root():
+        return {"message": "API is running", "docs": "/docs"}
 
 
 @app.get("/health")

@@ -1,7 +1,20 @@
 import os
+import sys
 from pydantic_settings import BaseSettings
 from typing import Optional, List, Literal
 from pydantic import field_validator
+
+
+def get_data_dir() -> str:
+    """获取数据目录（兼容打包模式）"""
+    if getattr(sys, 'frozen', False):
+        app_data = os.getenv("APPDATA")
+        if app_data:
+            app_dir = os.path.join(app_data, "cos2edu")
+            os.makedirs(app_dir, exist_ok=True)
+            return app_dir
+    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    return os.path.join(base_dir, "data")
 
 
 EnvironmentType = Literal["dev", "prod", "test"]
@@ -14,14 +27,14 @@ class BaseConfig(BaseSettings):
     HOST: str = "0.0.0.0"
     PORT: int = 8000
     
-    DATA_DIR: str = "./data"
-    CHARACTERS_DIR: str = "./data/characters"
-    MATERIALS_DIR: str = "./data/materials"
-    CONVERSATIONS_DIR: str = "./data/conversations"
-    UPLOADS_DIR: str = "./data/uploads"
-    AVATARS_DIR: str = "./data/uploads/avatars"
-    BACKGROUNDS_DIR: str = "./data/uploads/backgrounds"
-
+    DATA_DIR: str = ""
+    CHARACTERS_DIR: str = ""
+    MATERIALS_DIR: str = ""
+    CONVERSATIONS_DIR: str = ""
+    UPLOADS_DIR: str = ""
+    AVATARS_DIR: str = ""
+    BACKGROUNDS_DIR: str = ""
+    
     class Config:
         env_file = ".env"
         case_sensitive = True
@@ -89,7 +102,7 @@ class BaseConfig(BaseSettings):
     CORS_ALLOW_METHODS: List[str] = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
     CORS_ALLOW_HEADERS: List[str] = ["*"]
     
-    DATABASE_URL: str = "sqlite+aiosqlite:///./data/app.db"
+    DATABASE_URL: str = ""
     
     LOG_LEVEL: str = "INFO"
     DEBUG: bool = False
@@ -119,8 +132,6 @@ class DevConfig(BaseConfig):
         "http://localhost:5173",
     ]
     CORS_ALLOW_METHODS: List[str] = ["*"]
-    
-    DATABASE_URL: str = "sqlite+aiosqlite:///./data/app.db"
 
 
 class ProdConfig(BaseConfig):
@@ -156,6 +167,24 @@ def get_settings() -> BaseConfig:
 
 settings = get_settings()
 
+_data_dir = get_data_dir()
+
+if not settings.DATA_DIR:
+    settings.DATA_DIR = _data_dir
+if not settings.CHARACTERS_DIR:
+    settings.CHARACTERS_DIR = os.path.join(_data_dir, "characters")
+if not settings.MATERIALS_DIR:
+    settings.MATERIALS_DIR = os.path.join(_data_dir, "materials")
+if not settings.CONVERSATIONS_DIR:
+    settings.CONVERSATIONS_DIR = os.path.join(_data_dir, "conversations")
+if not settings.UPLOADS_DIR:
+    settings.UPLOADS_DIR = os.path.join(_data_dir, "uploads")
+if not settings.AVATARS_DIR:
+    settings.AVATARS_DIR = os.path.join(_data_dir, "uploads", "avatars")
+if not settings.BACKGROUNDS_DIR:
+    settings.BACKGROUNDS_DIR = os.path.join(_data_dir, "uploads", "backgrounds")
+if not settings.DATABASE_URL:
+    settings.DATABASE_URL = f"sqlite+aiosqlite:///{os.path.join(_data_dir, 'app.db')}"
 
 for dir_path in [
     settings.DATA_DIR,

@@ -117,7 +117,7 @@
           </div>
           <div class="config-item">
             <span class="config-label">API Key</span>
-            <span class="config-value">{{ currentConfig.api_key ? '已配置 (隐藏)' : '未配置' }}</span>
+            <span class="config-value">{{ currentConfig.id ? '已配置' : '未配置' }}</span>
           </div>
         </div>
       </section>

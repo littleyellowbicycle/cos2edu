@@ -48,13 +48,85 @@
             </div>
           </div>
           <div class="card-actions">
-            <button class="btn-chat" @click="startChat(char)">开始对话</button>
+            <button class="btn-chat" @click="openMaterialSelector(char)">开始对话</button>
             <button class="btn-edit" @click="editCharacter(char)">编辑</button>
             <button class="btn-delete" @click="deleteCharacter(char.id)">删除</button>
           </div>
         </article>
       </div>
     </main>
+
+    <el-dialog 
+      v-model="showMaterialDialog" 
+      title="选择教材"
+      width="500px"
+      class="material-selector-dialog"
+    >
+      <div class="material-selector-content">
+        <p class="material-selector-hint">为对话选择教材（可选）</p>
+        
+        <div v-if="materials.length <= 6" class="material-options">
+          <label class="material-option" :class="{ active: selectedMaterialId === null }">
+            <input type="radio" :value="null" v-model="selectedMaterialId" />
+            <span class="option-content">
+              <span class="option-title">不使用教材</span>
+              <span class="option-desc">直接与角色进行自由对话</span>
+            </span>
+          </label>
+          <label 
+            v-for="mat in materials" 
+            :key="mat.id" 
+            class="material-option" 
+            :class="{ active: selectedMaterialId === mat.id }"
+          >
+            <input type="radio" :value="mat.id" v-model="selectedMaterialId" />
+            <span class="option-content">
+              <span class="option-title">{{ mat.title }}</span>
+              <span class="option-desc">{{ mat.description || '暂无描述' }}</span>
+            </span>
+          </label>
+        </div>
+
+        <div v-else class="material-select-wrapper">
+          <div class="material-search">
+            <input 
+              v-model="materialSearch" 
+              type="text" 
+              placeholder="搜索教材..."
+              class="search-input"
+            />
+          </div>
+          <div class="material-select-list">
+            <label class="material-option" :class="{ active: selectedMaterialId === null }">
+              <input type="radio" :value="null" v-model="selectedMaterialId" />
+              <span class="option-content">
+                <span class="option-title">不使用教材</span>
+                <span class="option-desc">直接与角色进行自由对话</span>
+              </span>
+            </label>
+            <label 
+              v-for="mat in filteredMaterials" 
+              :key="mat.id" 
+              class="material-option" 
+              :class="{ active: selectedMaterialId === mat.id }"
+            >
+              <input type="radio" :value="mat.id" v-model="selectedMaterialId" />
+              <span class="option-content">
+                <span class="option-title">{{ mat.title }}</span>
+                <span class="option-desc">{{ mat.description || '暂无描述' }}</span>
+              </span>
+            </label>
+            <div v-if="filteredMaterials.length === 0 && materialSearch" class="no-results">
+              未找到匹配的教材
+            </div>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <button class="btn-cancel" @click="showMaterialDialog = false">取消</button>
+        <button class="btn-submit" @click="startChatWithMaterial">开始对话</button>
+      </template>
+    </el-dialog>
 
     <el-dialog 
       v-model="showCreateDialog" 
@@ -70,7 +142,7 @@
           </div>
           <div class="avatar-type-tabs">
             <button type="button" :class="{ active: form.avatar_type === 'emoji' }" @click="form.avatar_type = 'emoji'">Emoji</button>
-            <button type="button" :class="{ active: form.avatar_type === 'image' }" @click="form.avatar_type = 'image'">图片URL</button>
+            <button type="button" :class="{ active: form.avatar_type === 'image' }" @click="form.avatar_type = 'image'">上传图片</button>
           </div>
           <div v-if="form.avatar_type === 'emoji'" class="emoji-picker">
             <input 
@@ -83,12 +155,18 @@
               <span v-for="e in emojiSuggestions" :key="e" @click="form.avatar = e" class="emoji-item">{{ e }}</span>
             </div>
           </div>
-          <div v-else class="image-url-input">
+          <div v-else class="image-upload-input">
             <input 
-              v-model="form.avatar" 
-              type="text" 
-              placeholder="输入图片URL，如: https://..."
+              type="file" 
+              accept="image/*"
+              @change="handleAvatarUpload" 
+              ref="avatarInput"
             />
+            <div v-if="avatarPreview" class="avatar-upload-preview">
+              <img :src="avatarPreview" alt="头像预览" />
+              <button type="button" class="remove-avatar" @click="removeAvatar">✕</button>
+            </div>
+            <p v-else class="upload-hint">点击选择图片文件（支持 JPG、PNG、GIF、WebP）</p>
           </div>
         </div>
         <div class="form-group">
@@ -140,10 +218,11 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useCharacterStore } from '@/stores/character'
 import { ElMessage } from 'element-plus'
+import api from '@/api'
 
 const router = useRouter()
 const store = useCharacterStore()
@@ -151,6 +230,20 @@ const characters = ref([])
 const showCreateDialog = ref(false)
 const editingCharacter = ref(null)
 const loading = ref(true)
+const materials = ref([])
+const showMaterialDialog = ref(false)
+const selectedMaterialId = ref(null)
+const selectedChar = ref(null)
+const materialSearch = ref('')
+
+const filteredMaterials = computed(() => {
+  if (!materialSearch.value) return materials.value
+  const search = materialSearch.value.toLowerCase()
+  return materials.value.filter(mat => 
+    mat.title.toLowerCase().includes(search) || 
+    (mat.description && mat.description.toLowerCase().includes(search))
+  )
+})
 
 const form = ref({
   name: '',
@@ -162,6 +255,36 @@ const form = ref({
 })
 
 const emojiSuggestions = ['😊', '😎', '🤔', '👍', '🎓', '📚', '💡', '🌟', '😃', '🤓', '🧐', '✨']
+const avatarPreview = ref('')
+const avatarInput = ref(null)
+
+function handleAvatarUpload(event) {
+  const file = event.target.files[0]
+  if (!file) return
+
+  if (file.size > 5 * 1024 * 1024) {
+    ElMessage.error('图片大小不能超过 5MB')
+    return
+  }
+
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    form.value.avatar = file
+    avatarPreview.value = e.target.result
+  }
+  reader.onerror = () => {
+    ElMessage.error('文件读取失败')
+  }
+  reader.readAsDataURL(file)
+}
+
+function removeAvatar() {
+  form.value.avatar = ''
+  avatarPreview.value = ''
+  if (avatarInput.value) {
+    avatarInput.value.value = ''
+  }
+}
 
 function getAvatarDisplay(item) {
   if (item.avatar_type === 'emoji' && item.avatar) {
@@ -172,7 +295,15 @@ function getAvatarDisplay(item) {
 
 function getAvatarStyle(item) {
   if (item.avatar_type === 'image' && item.avatar) {
-    return { backgroundImage: `url(${item.avatar})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+    if (typeof item.avatar === 'string') {
+      if (item.avatar.startsWith('data:') || item.avatar.startsWith('http')) {
+        return { backgroundImage: `url(${item.avatar})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+      }
+      if (item.avatar.startsWith('/')) {
+        return { backgroundImage: `url(${item.avatar})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+      }
+      return { backgroundImage: `url(/api/v1/avatars/${item.avatar})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+    }
   }
   return {}
 }
@@ -193,11 +324,24 @@ async function handleSubmit() {
   }
   
   try {
+    const data = new FormData()
+    data.append('name', form.value.name)
+    data.append('description', form.value.description || '')
+    data.append('personality', form.value.personality || '')
+    data.append('background', form.value.background || '')
+    data.append('avatar_type', form.value.avatar_type)
+    
+    if (form.value.avatar_type === 'image' && form.value.avatar instanceof File) {
+      data.append('avatar', form.value.avatar)
+    } else if (form.value.avatar_type === 'emoji') {
+      data.append('avatar', form.value.avatar)
+    }
+    
     if (editingCharacter.value) {
-      await store.update(editingCharacter.value.id, form.value)
+      await store.update(editingCharacter.value.id, data)
       ElMessage.success('角色已更新')
     } else {
-      await store.create(form.value)
+      await store.create(data)
       ElMessage.success('角色已创建')
     }
     characters.value = store.characters
@@ -217,6 +361,16 @@ function editCharacter(char) {
     avatar: char.avatar || '',
     avatar_type: char.avatar_type || 'emoji'
   }
+  avatarPreview.value = ''
+  if (char.avatar_type === 'image' && char.avatar) {
+    if (char.avatar.startsWith('data:') || char.avatar.startsWith('http')) {
+      avatarPreview.value = char.avatar
+    } else if (char.avatar.startsWith('/')) {
+      avatarPreview.value = char.avatar
+    } else {
+      avatarPreview.value = `/api/v1/avatars/${char.avatar}`
+    }
+  }
   showCreateDialog.value = true
 }
 
@@ -227,6 +381,33 @@ async function deleteCharacter(id) {
     ElMessage.success('角色已删除')
   } catch (e) {
     ElMessage.error('删除失败')
+  }
+}
+
+async function openMaterialSelector(char) {
+  selectedChar.value = char
+  selectedMaterialId.value = null
+  try {
+    materials.value = await api.materials.getAll()
+  } catch (e) {
+    materials.value = []
+  }
+  showMaterialDialog.value = true
+}
+
+async function startChatWithMaterial() {
+  showMaterialDialog.value = false
+  if (!selectedChar.value) return
+  
+  try {
+    const conversation = await api.conversations.create({
+      character_id: selectedChar.value.id,
+      material_id: selectedMaterialId.value,
+      title: `与 ${selectedChar.value.name} 的对话`
+    })
+    router.push(`/chat/${selectedChar.value.id}?conversationId=${conversation.id}`)
+  } catch (e) {
+    ElMessage.error('创建对话失败')
   }
 }
 
@@ -495,14 +676,61 @@ function closeDialog() {
   transform: scale(1.1);
 }
 
-.image-url-input input {
+.image-upload-input input[type="file"] {
   width: 100%;
   padding: 12px 16px;
   font-size: 14px;
-  border: 1px solid var(--color-border);
+  border: 1px dashed var(--color-border);
   border-radius: 4px;
   background: var(--color-bg);
   color: var(--color-text);
+  cursor: pointer;
+}
+
+.image-upload-input input[type="file"]:hover {
+  border-color: var(--color-accent);
+}
+
+.avatar-upload-preview {
+  position: relative;
+  display: inline-block;
+  margin-top: 12px;
+}
+
+.avatar-upload-preview img {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--color-border);
+}
+
+.remove-avatar {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #C75050;
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.remove-avatar:hover {
+  background: #a03939;
+}
+
+.upload-hint {
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  text-align: center;
 }
 
 .card-title {
@@ -713,5 +941,119 @@ function closeDialog() {
   .characters-grid {
     grid-template-columns: 1fr;
   }
+}
+
+.material-selector-content {
+  padding: 8px 0;
+}
+
+.material-selector-hint {
+  font-size: 14px;
+  color: var(--color-text-muted);
+  margin-bottom: 20px;
+}
+
+.material-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.material-select-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.material-search {
+  position: relative;
+}
+
+.search-input {
+  width: 100%;
+  padding: 12px 16px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  transition: border-color 0.2s;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.search-input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.material-select-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+.material-select-list .material-option {
+  padding: 12px 16px;
+}
+
+.no-results {
+  text-align: center;
+  padding: 24px;
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+.material-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.material-option:hover {
+  border-color: var(--color-accent);
+}
+
+.material-option.active {
+  border-color: var(--color-accent);
+  background: var(--color-bg-warm);
+}
+
+.material-option input {
+  margin-top: 4px;
+  accent-color: var(--color-accent);
+}
+
+.option-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.option-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.option-desc {
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.material-selector-dialog :deep(.el-dialog__body) {
+  padding: 24px 32px;
 }
 </style>

@@ -7,7 +7,8 @@
       <div class="header-info">
         <h1 class="chat-title">{{ characterName || '对话' }}</h1>
         <p class="chat-status" aria-live="polite">
-          <span v-if="isTyping">正在思考...</span>
+          <span v-if="materialTitle">教材: {{ materialTitle }}</span>
+          <span v-else-if="isTyping">正在思考...</span>
           <span v-else-if="sending">发送中...</span>
           <span v-else>苏格拉底式对话中</span>
         </p>
@@ -197,6 +198,7 @@ const characterAvatarType = ref('emoji')
 const conversationHistory = ref([])
 const loading = ref(false)
 const messageRefs = {}
+const materialTitle = ref('')
 
 function getAvatarDisplay() {
   if (characterAvatarType.value === 'emoji' && characterAvatar.value) {
@@ -351,6 +353,20 @@ async function sendMessage() {
 async function loadConversation(conv) {
   conversationId.value = conv.id
   messages.value = []
+  
+  try {
+    const convData = await api.conversations.getById(conv.id)
+    if (convData.material) {
+      materialTitle.value = convData.material.title
+    }
+    if (convData.character) {
+      characterName.value = convData.character.name
+      characterAvatar.value = convData.character.avatar || ''
+      characterAvatarType.value = convData.character.avatar_type || 'emoji'
+    }
+  } catch (e) {
+    console.error('Failed to load conversation details:', e)
+  }
 }
 
 function formatTime(date) {

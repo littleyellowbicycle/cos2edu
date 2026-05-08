@@ -65,6 +65,7 @@ class LLMProvider:
         self.api_key = self.model_config.get("api_key") or settings.OPENAI_API_KEY
         self.base_url = self.model_config.get("base_url") or PROVIDER_DEFAULTS.get(self.provider, {}).get("base_url") or settings.OPENAI_BASE_URL
         self.group_id = self.model_config.get("group_id") or getattr(settings, 'MINIMAX_GROUP_ID', None)
+        logger.info(f"[LLMProvider] init: provider={self.provider}, model={self.model_name}, base_url={self.base_url}")
 
     def _validate_config(self):
         if not self.api_key or self.api_key in ("your-openai-api-key", ""):
@@ -197,6 +198,9 @@ class ChatService:
                     "base_url": model_config.base_url,
                     "group_id": getattr(model_config, 'group_id', None)
                 }
+                logger.info(f"[Chat] model_config: provider={model_config.provider}, model={model_config.model_name}, base_url={model_config.base_url}")
+            else:
+                logger.warning("[Chat] No model_config provided")
 
             llm = LLMProvider(config_dict)
             response = await llm.chat(messages)
@@ -239,6 +243,9 @@ class ChatService:
                     "base_url": model_config.base_url,
                     "group_id": getattr(model_config, 'group_id', None)
                 }
+                logger.info(f"[Chat] model_config: provider={model_config.provider}, model={model_config.model_name}, base_url={model_config.base_url}")
+            else:
+                logger.warning("[Chat] No model_config provided")
 
             llm = LLMProvider(config_dict)
 
@@ -300,9 +307,18 @@ class ChatService:
             messages.append({"role": "system", "content": system_prompt})
 
         if conversation.material:
+            material_content = ""
+            if conversation.material.content_type == 'url' and conversation.material.content_url:
+                material_content = f"教材URL: {conversation.material.content_url}\n\n请根据这个URL的内容回答用户的问题。"
+            elif conversation.material.content:
+                material_content = conversation.material.content
+            
+            if not material_content:
+                raise ValueError(f"教材「{conversation.material.title}」没有内容。请检查教材是否已上传文件，或内容是否为空。")
+            
             messages.append({
                 "role": "system",
-                "content": f"教材信息: {conversation.material.title} - {conversation.material.content}"
+                "content": f"教材信息: {conversation.material.title}\n\n{material_content}"
             })
 
         async with UnitOfWork() as uow:
