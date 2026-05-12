@@ -2,9 +2,10 @@ from typing import List, Optional
 from datetime import datetime
 import os
 import uuid
+import io
 import aiofiles
 from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from starlette.responses import FileResponse
 
 from app.core.limiter import limiter
@@ -36,7 +37,21 @@ class TestConfigRequest(BaseModel):
     base_url: Optional[str] = None
 
 
+class ModelOption(BaseModel):
+    value: str
+    label: str
+
+
+class ProviderInfo(BaseModel):
+    key: str
+    name: str
+    base_url: str
+    models: List[ModelOption]
+
+
 class CreateConversationResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: int
     title: Optional[str] = None
     character_id: Optional[int] = None
@@ -47,9 +62,6 @@ class CreateConversationResponse(BaseModel):
     character_name: Optional[str] = None
     character_avatar: Optional[str] = None
     character_avatar_type: Optional[str] = None
-
-    class Config:
-        from_attributes = True
 
 
 @router.get("/characters", response_model=List[CharacterResponse])
@@ -233,7 +245,7 @@ async def upload_material(request: Request, file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="请选择文件")
     
     file_ext = os.path.splitext(file.filename)[1].lower()
-    allowed_exts = ['.txt', '.md', '.markdown', '.text']
+    allowed_exts = ['.txt', '.md', '.markdown', '.text', '.pdf']
     
     if file_ext not in allowed_exts:
         raise HTTPException(status_code=400, detail=f"不支持的文件格式，仅支持: {', '.join(allowed_exts)}")
@@ -243,13 +255,24 @@ async def upload_material(request: Request, file: UploadFile = File(...)):
     os.makedirs(settings.MATERIALS_DIR, exist_ok=True)
     
     content = await file.read()
-    try:
-        text = content.decode('utf-8')
-    except UnicodeDecodeError:
+    
+    if file_ext == '.pdf':
+        from PyPDF2 import PdfReader
+        pdf_reader = PdfReader(io.BytesIO(content))
+        text_parts = []
+        for page in pdf_reader.pages:
+            page_text = page.extract_text()
+            if page_text:
+                text_parts.append(page_text)
+        text = '\n'.join(text_parts)
+    else:
         try:
-            text = content.decode('gbk')
-        except:
-            text = content.decode('utf-8', errors='ignore')
+            text = content.decode('utf-8')
+        except UnicodeDecodeError:
+            try:
+                text = content.decode('gbk')
+            except:
+                text = content.decode('utf-8', errors='ignore')
     
     async with aiofiles.open(file_path, 'w', encoding='utf-8') as f:
         await f.write(text)
@@ -280,9 +303,7 @@ async def generate_material_summary_async(material_id: int):
             
             summary = await _call_llm_for_summary(content)
             
-            await MaterialService.update(material_id, {
-                "description": summary
-            })
+            await MaterialService.update(material_id, MaterialUpdate(description=summary))
             logger.info(f"教材 {material_id} 概括生成成功: {summary[:50]}...")
         except Exception as e:
             logger.error(f"教材 {material_id} 概括生成失败: {e}")
@@ -447,6 +468,236 @@ async def delete_model_config(request: Request, config_id: int):
     if not await ModelConfigService.delete(config_id):
         raise HTTPException(status_code=404, detail="模型配置不存在")
     return {"message": "删除成功"}
+
+
+PROVIDER_CONFIGS = {
+    "openai": {
+        "name": "OpenAI",
+        "base_url": "https://api.openai.com/v1",
+        "models": [
+            {"value": "gpt-4.1", "label": "GPT-4.1 (推荐)"},
+            {"value": "gpt-4.1-mini", "label": "GPT-4.1 Mini"},
+            {"value": "gpt-4o", "label": "GPT-4o"},
+            {"value": "gpt-4o-mini", "label": "GPT-4o Mini"},
+            {"value": "gpt-4-turbo", "label": "GPT-4 Turbo"},
+        ]
+    },
+    "anthropic": {
+        "name": "Anthropic",
+        "base_url": "https://api.anthropic.com",
+        "models": [
+            {"value": "claude-sonnet-4-20250514", "label": "Claude Sonnet 4 (推荐)"},
+            {"value": "claude-opus-4-20250514", "label": "Claude Opus 4"},
+            {"value": "claude-3-5-sonnet-20241022", "label": "Claude 3.5 Sonnet"},
+            {"value": "claude-3-5-haiku-20241022", "label": "Claude 3.5 Haiku"},
+            {"value": "claude-3-opus-20240229", "label": "Claude 3 Opus"},
+        ]
+    },
+    "dashscope": {
+        "name": "阿里云 DashScope",
+        "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "models": [
+            {"value": "qwen3-max", "label": "Qwen3 Max (推荐)"},
+            {"value": "qwen3-plus", "label": "Qwen3 Plus"},
+            {"value": "qwen-plus", "label": "Qwen Plus"},
+            {"value": "qwen-max", "label": "Qwen Max"},
+            {"value": "qwen-turbo", "label": "Qwen Turbo"},
+        ]
+    },
+    "zhipu": {
+        "name": "智谱 GLM",
+        "base_url": "https://open.bigmodel.cn/api/paas/v4",
+        "models": [
+            {"value": "glm-4.5", "label": "GLM-4.5 (推荐)"},
+            {"value": "glm-4-plus", "label": "GLM-4 Plus"},
+            {"value": "glm-4-flash", "label": "GLM-4 Flash"},
+        ]
+    },
+    "doubao": {
+        "name": "豆包 (字节)",
+        "base_url": "https://ark.cn-beijing.volces.com/api/v3",
+        "models": [
+            {"value": "doubao-seed-1.6", "label": "豆包 Seed 1.6 (推荐)"},
+            {"value": "doubao-pro-32k", "label": "豆包 Pro 32K"},
+            {"value": "doubao-lite-32k", "label": "豆包 Lite 32K"},
+        ]
+    },
+    "wenxin": {
+        "name": "百度文心",
+        "base_url": "https://qianfan.baidubce.com/v2",
+        "models": [
+            {"value": "ernie-4.5-8k-preview", "label": "ERNIE 4.5 8K (推荐)"},
+            {"value": "ernie-4.0-8k-latest", "label": "ERNIE 4.0 8K"},
+            {"value": "ernie-3.5-8k", "label": "ERNIE 3.5 8K"},
+        ]
+    },
+    "hunyuan": {
+        "name": "腾讯混元",
+        "base_url": "https://api.hunyuan.cloud.tencent.com",
+        "models": [
+            {"value": "hunyuan-turbos-latest", "label": "混元 TurboS (推荐)"},
+            {"value": "hunyuan-turbo-latest", "label": "混元 Turbo"},
+            {"value": "hunyuan-pro", "label": "混元 Pro"},
+        ]
+    },
+    "moonshot": {
+        "name": "月之暗面 (Kimi)",
+        "base_url": "https://api.moonshot.cn/v1",
+        "models": [
+            {"value": "moonshot-v1-8k", "label": "Kimi v1 8K (推荐)"},
+            {"value": "moonshot-v1-32k", "label": "Kimi v1 32K"},
+            {"value": "moonshot-v1-128k", "label": "Kimi v1 128K"},
+        ]
+    },
+    "gemini": {
+        "name": "Google Gemini",
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+        "models": [
+            {"value": "gemini-2.5-pro", "label": "Gemini 2.5 Pro (推荐)"},
+            {"value": "gemini-2.5-flash", "label": "Gemini 2.5 Flash"},
+            {"value": "gemini-2.0-flash", "label": "Gemini 2.0 Flash"},
+        ]
+    },
+    "minimax": {
+        "name": "MiniMax",
+        "base_url": "https://api.minimax.chat/v1",
+        "models": [
+            {"value": "MiniMax-M2.7", "label": "MiniMax M2.7 (推荐)"},
+            {"value": "MiniMax-M2.5", "label": "MiniMax M2.5"},
+            {"value": "MiniMax-M2.1", "label": "MiniMax M2.1"},
+        ]
+    },
+    "deepseek": {
+        "name": "DeepSeek",
+        "base_url": "https://api.deepseek.com/v1",
+        "models": [
+            {"value": "deepseek-chat", "label": "DeepSeek-V3 (推荐)"},
+            {"value": "deepseek-reasoner", "label": "DeepSeek-R1"},
+        ]
+    },
+    "siliconflow": {
+        "name": "硅基流动",
+        "base_url": "https://api.siliconflow.cn/v1",
+        "models": [
+            {"value": "deepseek-ai/DeepSeek-V3", "label": "DeepSeek-V3 (推荐)"},
+            {"value": "deepseek-ai/DeepSeek-R1", "label": "DeepSeek-R1"},
+            {"value": "Qwen/Qwen3-235B-A22B", "label": "Qwen3 235B"},
+            {"value": "Qwen/QwQ-32B", "label": "QwQ 32B"},
+            {"value": "Pro/zai-org/GLM-4.5", "label": "GLM-4.5"},
+        ]
+    },
+    "openrouter": {
+        "name": "OpenRouter",
+        "base_url": "https://openrouter.ai/api/v1",
+        "models": [
+            {"value": "openai/gpt-4.1", "label": "GPT-4.1 (推荐)"},
+            {"value": "anthropic/claude-sonnet-4", "label": "Claude Sonnet 4"},
+            {"value": "google/gemini-2.5-pro", "label": "Gemini 2.5 Pro"},
+            {"value": "deepseek/deepseek-chat", "label": "DeepSeek-V3"},
+        ]
+    },
+    "ollama": {
+        "name": "Ollama (本地)",
+        "base_url": "http://localhost:11434/v1",
+        "models": [
+            {"value": "qwen3", "label": "Qwen3"},
+            {"value": "llama3", "label": "Llama 3"},
+            {"value": "deepseek-r1", "label": "DeepSeek-R1"},
+            {"value": "gemma3", "label": "Gemma 3"},
+            {"value": "mistral", "label": "Mistral"},
+        ]
+    },
+}
+
+
+@router.get("/providers", response_model=List[ProviderInfo])
+async def list_providers():
+    return [
+        ProviderInfo(key=k, name=v["name"], base_url=v["base_url"], models=v["models"])
+        for k, v in PROVIDER_CONFIGS.items()
+    ]
+
+
+class ModelFetchRequest(BaseModel):
+    api_key: Optional[str] = None
+    base_url: Optional[str] = None
+
+
+async def _fetch_models_from_api(provider: str, api_key: str, base_url: str) -> Optional[List[dict]]:
+    import httpx
+    
+    if not api_key:
+        return None
+    
+    provider_config = PROVIDER_CONFIGS.get(provider)
+    if not base_url:
+        base_url = provider_config["base_url"] if provider_config else ""
+    if not base_url:
+        return None
+    
+    base_url = base_url.rstrip("/")
+    
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            if provider == "gemini":
+                url = f"{base_url}/v1beta/models"
+                resp = await client.get(url, params={"key": api_key})
+                if resp.status_code == 200:
+                    data = resp.json()
+                    models = data.get("models", [])
+                    if models:
+                        return [
+                            {"value": m["name"].replace("models/", ""), "label": m.get("displayName", m["name"].replace("models/", ""))}
+                            for m in models
+                            if "gemini" in m.get("name", "").lower()
+                        ]
+            
+            elif provider == "anthropic":
+                url = f"{base_url}/v1/models"
+                resp = await client.get(url, headers={
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01"
+                })
+                if resp.status_code == 200:
+                    data = resp.json()
+                    models = data.get("data", [])
+                    if models:
+                        return [{"value": m["id"], "label": m.get("display_name", m["id"])} for m in models]
+            
+            else:
+                url = f"{base_url}/models"
+                resp = await client.get(url, headers={"Authorization": f"Bearer {api_key}"})
+                if resp.status_code != 200:
+                    url = f"{base_url}/v1/models"
+                    resp = await client.get(url, headers={"Authorization": f"Bearer {api_key}"})
+                
+                if resp.status_code == 200:
+                    data = resp.json()
+                    models = data.get("data", [])
+                    if models:
+                        return [{"value": m["id"], "label": m["id"]} for m in models]
+    except Exception:
+        pass
+    
+    return None
+
+
+@router.get("/providers/{provider}/models", response_model=List[ModelOption])
+async def get_provider_models(
+    provider: str,
+    api_key: Optional[str] = None,
+    base_url: Optional[str] = None,
+):
+    config = PROVIDER_CONFIGS.get(provider)
+    if not config:
+        raise HTTPException(status_code=404, detail=f"不支持的提供商: {provider}")
+    
+    if api_key:
+        fetched = await _fetch_models_from_api(provider, api_key, base_url)
+        if fetched:
+            return [ModelOption(**m) for m in fetched]
+    
+    return [ModelOption(**m) for m in config["models"]]
 
 
 @router.get("/health")

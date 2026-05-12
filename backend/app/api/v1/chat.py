@@ -22,10 +22,8 @@ Chat API Module - 聊天接口模块
 from typing import Optional, AsyncIterator
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from sqlalchemy.ext.asyncio import AsyncSession
 import json
 
-from app.core.database import AsyncSessionLocal
 from app.core.limiter import limiter
 from app.core.concurrency import concurrency_lock
 from app.schemas import ChatMessage
@@ -96,18 +94,7 @@ async def acquire_concurrency_lock(client_id: str, conversation_id: int, lock_ty
     return lock_key
 
 
-async def get_model_config(db: AsyncSession, model_config_id: Optional[int]):
-    """获取模型配置
-    
-    根据配置 ID 获取模型配置，如果未提供 ID 则返回默认配置。
-    
-    Args:
-        db: 数据库会话
-        model_config_id: 可选的模型配置 ID
-        
-    Returns:
-        ModelConfig 对象或 None
-    """
+async def get_model_config(model_config_id: Optional[int]):
     if model_config_id:
         return await ModelConfigService.get_by_id(model_config_id)
     return await ModelConfigService.get_default()
@@ -147,16 +134,14 @@ async def chat(
     lock_key = await acquire_concurrency_lock(client_id, conversation_id, "chat")
     
     try:
-        async with AsyncSessionLocal() as db:
-            model_config = await get_model_config(db, model_config_id)
-            
-            response = await ChatService.chat(
-                db=db,
-                conversation_id=conversation_id,
-                user_message=message.content,
-                model_config=model_config
-            )
-            return {"response": response}
+        model_config = await get_model_config(model_config_id)
+        
+        response = await ChatService.chat(
+            conversation_id=conversation_id,
+            user_message=message.content,
+            model_config=model_config
+        )
+        return {"response": response}
     
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -195,37 +180,25 @@ async def chat_stream(
     message_content = message.content
     
     async def generate() -> AsyncIterator[str]:
-        """生成流式响应的异步生成器"""
         try:
-            async with AsyncSessionLocal() as db:
-                model_config = None
-                if model_config_id:
-                    try:
-                        model_config = await ModelConfigService.get_by_id(model_config_id)
-                    except Exception as e:
-                        yield f"data: {json.dumps({'error': f'获取模型配置失败: {str(e)}'}, ensure_ascii=False)}\n\n"
-                        yield "data: [DONE]\n\n"
-                        return
-                else:
-                    model_config = await ModelConfigService.get_default()
-                
-                try:
-                    async for chunk in ChatService.chat_stream(
-                        db=db,
-                        conversation_id=conversation_id,
-                        user_message=message_content,
-                        model_config=model_config
-                    ):
-                        yield f"data: {json.dumps({'content': chunk}, ensure_ascii=False)}\n\n"
-                    yield "data: [DONE]\n\n"
-                
-                except ValueError as e:
-                    yield f"data: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
-                    yield "data: [DONE]\n\n"
-                
-                except Exception as e:
-                    yield f"data: {json.dumps({'error': f'流式响应错误: {str(e)}'}, ensure_ascii=False)}\n\n"
-                    yield "data: [DONE]\n\n"
+            model_config = await get_model_config(model_config_id)
+            
+            try:
+                async for chunk in ChatService.chat_stream(
+                    conversation_id=conversation_id,
+                    user_message=message_content,
+                    model_config=model_config
+                ):
+                    yield f"data: {json.dumps({'content': chunk}, ensure_ascii=False)}\n\n"
+                yield "data: [DONE]\n\n"
+            
+            except ValueError as e:
+                yield f"data: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
+                yield "data: [DONE]\n\n"
+            
+            except Exception as e:
+                yield f"data: {json.dumps({'error': f'流式响应错误: {str(e)}'}, ensure_ascii=False)}\n\n"
+                yield "data: [DONE]\n\n"
         
         finally:
             await concurrency_lock.release(lock_key)

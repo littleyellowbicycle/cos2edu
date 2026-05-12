@@ -1,13 +1,10 @@
 from typing import AsyncIterator, Optional, List, Dict, Any
 import json
-from sqlalchemy.ext.asyncio import AsyncSession
 from openai import AsyncOpenAI
 from anthropic import AsyncAnthropic
 
 from app.core.config import settings
 from app.core.logging_config import get_logger
-from models.conversation import Conversation
-from models.message import Message
 from app.repositories.unit_of_work import UnitOfWork
 
 logger = get_logger(__name__)
@@ -16,31 +13,31 @@ logger = get_logger(__name__)
 PROVIDER_DEFAULTS = {
     "openai": {
         "base_url": "https://api.openai.com/v1",
-        "model": "gpt-4o"
+        "model": "gpt-4.1"
     },
     "anthropic": {
         "base_url": "https://api.anthropic.com",
-        "model": "claude-3-opus-20240229"
+        "model": "claude-sonnet-4-20250514"
     },
     "dashscope": {
         "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-        "model": "qwen-plus"
+        "model": "qwen3-max"
     },
     "zhipu": {
         "base_url": "https://open.bigmodel.cn/api/paas/v4",
-        "model": "glm-4"
+        "model": "glm-4.5"
     },
     "doubao": {
         "base_url": "https://ark.cn-beijing.volces.com/api/v3",
-        "model": "doubao-pro-32k"
+        "model": "doubao-seed-1.6"
     },
     "wenxin": {
         "base_url": "https://qianfan.baidubce.com/v2",
-        "model": "ernie-4.0-8k-latest"
+        "model": "ernie-4.5-8k-preview"
     },
     "hunyuan": {
         "base_url": "https://api.hunyuan.cloud.tencent.com",
-        "model": "hunyuan-pro"
+        "model": "hunyuan-turbos-latest"
     },
     "moonshot": {
         "base_url": "https://api.moonshot.cn/v1",
@@ -48,11 +45,27 @@ PROVIDER_DEFAULTS = {
     },
     "gemini": {
         "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
-        "model": "gemini-1.5-pro"
+        "model": "gemini-2.5-pro"
     },
     "minimax": {
         "base_url": "https://api.minimax.chat/v1",
         "model": "MiniMax-M2.7"
+    },
+    "deepseek": {
+        "base_url": "https://api.deepseek.com/v1",
+        "model": "deepseek-chat"
+    },
+    "siliconflow": {
+        "base_url": "https://api.siliconflow.cn/v1",
+        "model": "deepseek-ai/DeepSeek-V3"
+    },
+    "openrouter": {
+        "base_url": "https://openrouter.ai/api/v1",
+        "model": "openai/gpt-4.1"
+    },
+    "ollama": {
+        "base_url": "http://localhost:11434/v1",
+        "model": "qwen3"
     }
 }
 
@@ -143,35 +156,11 @@ class LLMProvider:
         except Exception as e:
             logger.error(f"LLM stream error [{self.provider}]: {str(e)}")
             raise
-        
-        if self.provider == "anthropic":
-            ant_messages = [{"role": m["role"] if m["role"] != "system" else "user", "content": m["content"]} for m in messages]
-            system_msg = next((m["content"] for m in messages if m["role"] == "system"), None)
-            stream = await client.messages.create(
-                model=self.model_name,
-                max_tokens=1024,
-                system=system_msg,
-                messages=ant_messages,
-                stream=True
-            )
-            async for chunk in stream:
-                if chunk.type == "content_block_delta" and hasattr(chunk, 'delta'):
-                    yield chunk.delta.text
-        else:
-            stream = await client.chat.completions.create(
-                model=self.model_name,
-                messages=messages,
-                stream=True
-            )
-            async for chunk in stream:
-                if chunk.choices[0].delta.content:
-                    yield chunk.choices[0].delta.content
 
 
 class ChatService:
     @staticmethod
     async def chat(
-        db: AsyncSession,
         conversation_id: int,
         user_message: str,
         model_config: Optional[Any] = None
@@ -216,7 +205,6 @@ class ChatService:
 
     @staticmethod
     async def chat_stream(
-        db: AsyncSession,
         conversation_id: int,
         user_message: str,
         model_config: Optional[Any] = None
@@ -312,6 +300,13 @@ class ChatService:
                 material_content = f"教材URL: {conversation.material.content_url}\n\n请根据这个URL的内容回答用户的问题。"
             elif conversation.material.content:
                 material_content = conversation.material.content
+            elif conversation.material.content_url:
+                import os
+                import aiofiles
+                file_path = os.path.join(settings.MATERIALS_DIR, conversation.material.content_url)
+                if os.path.exists(file_path):
+                    async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
+                        material_content = await f.read()
             
             if not material_content:
                 raise ValueError(f"教材「{conversation.material.title}」没有内容。请检查教材是否已上传文件，或内容是否为空。")

@@ -34,8 +34,8 @@ class ConversationRepository(BaseRepository[Conversation]):
         summary: str,
         covered_message_count: int
     ) -> bool:
-        from datetime import datetime
-        now = datetime.utcnow()
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
 
         update_stmt = (
             update(Conversation)

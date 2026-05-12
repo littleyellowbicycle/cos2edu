@@ -1,6 +1,7 @@
 import os
 import sys
 from pydantic_settings import BaseSettings
+from pydantic import ConfigDict
 from typing import Optional, List, Literal
 from pydantic import field_validator
 
@@ -35,10 +36,7 @@ class BaseConfig(BaseSettings):
     AVATARS_DIR: str = ""
     BACKGROUNDS_DIR: str = ""
     
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
-        extra = "ignore"
+    model_config = ConfigDict(env_file=".env", case_sensitive=True, extra="ignore")
     
     MAX_UPLOAD_SIZE: int = 10 * 1024 * 1024
     ALLOWED_IMAGE_TYPES: List[str] = ["image/jpeg", "image/png", "image/gif", "image/webp"]
@@ -114,9 +112,7 @@ class BaseConfig(BaseSettings):
             return [origin.strip() for origin in v.split(",")]
         return v
     
-    class Config:
-        case_sensitive = True
-        extra = "ignore"
+    model_config = ConfigDict(case_sensitive=True, extra="ignore")
 
 
 class DevConfig(BaseConfig):
@@ -148,10 +144,7 @@ class TestConfig(BaseConfig):
     
     DATABASE_URL: str = "sqlite+aiosqlite:///:memory:"
     
-    class Config:
-        env_file = ".env.test"
-        case_sensitive = True
-        extra = "ignore"
+    model_config = ConfigDict(env_file=".env.test", case_sensitive=True, extra="ignore")
 
 
 def get_settings() -> BaseConfig:

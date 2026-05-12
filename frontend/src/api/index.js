@@ -47,10 +47,10 @@ export default {
     create: (data) => apiClient.post('/crud/materials', data),
     update: (id, data) => apiClient.put(`/crud/materials/${id}`, data),
     delete: (id) => apiClient.delete(`/crud/materials/${id}`),
-    upload: (formData) => apiClient.post('/materials/upload', formData, {
+    upload: (formData) => apiClient.post('/crud/materials/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     }),
-    generateSummary: (id) => apiClient.post(`/materials/${id}/generate-summary`)
+    generateSummary: (id) => apiClient.post(`/crud/materials/${id}/generate-summary`)
   },
   conversations: {
     getAll: () => apiClient.get('/crud/conversations'),
@@ -78,5 +78,9 @@ export default {
     background: (formData) => apiClient.post('/upload/background', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
+  },
+  providers: {
+    list: () => apiClient.get('/crud/providers'),
+    models: (provider, params) => apiClient.get(`/crud/providers/${provider}/models`, { params })
   }
 }

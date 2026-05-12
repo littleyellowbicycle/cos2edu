@@ -67,7 +67,10 @@ class MaterialService:
     @staticmethod
     async def create(material: MaterialCreate) -> Material:
         async with UnitOfWork() as uow:
-            return await uow.materials.create(material.model_dump())
+            data = material.model_dump()
+            if data.get('content') is None:
+                data['content'] = ''
+            return await uow.materials.create(data)
 
     @staticmethod
     async def update(material_id: int, material: MaterialUpdate) -> Optional[Material]:
