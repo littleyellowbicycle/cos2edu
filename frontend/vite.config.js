@@ -3,7 +3,17 @@ import vue from '@vitejs/plugin-vue'
 import { resolve } from 'path'
 
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [
+    vue(),
+    {
+      name: 'fix-element-plus-vue-export-helper',
+      resolveId(id) {
+        if (id.includes('plugin-vue_export-helper')) {
+          return resolve(__dirname, 'src/polyfills/vue-export-helper.mjs')
+        }
+      },
+    },
+  ],
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src')

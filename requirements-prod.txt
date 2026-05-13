@@ -14,3 +14,4 @@ httpx
 slowapi
 limits
 tiktoken
+pdfplumber

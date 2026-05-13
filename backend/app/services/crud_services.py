@@ -1,10 +1,12 @@
 from typing import List, Optional
+from sqlalchemy.exc import IntegrityError
 from models.character import Character
 from models.material import Material
 from models.conversation import Conversation
 from models.message import Message
 from models.model_config import ModelConfig
 from models.background_config import BackgroundConfig
+from app.core.config import settings
 from app.core.logging_config import get_logger
 from app.schemas import (
     CharacterCreate, CharacterUpdate,
@@ -33,7 +35,10 @@ class CharacterService:
     @staticmethod
     async def create(character: CharacterCreate) -> Character:
         async with UnitOfWork() as uow:
-            return await uow.characters.create(character.model_dump())
+            try:
+                return await uow.characters.create(character.model_dump())
+            except IntegrityError:
+                raise ValueError(f"角色名称「{character.name}」已存在，请使用其他名称")
 
     @staticmethod
     async def update(character_id: int, character: CharacterUpdate) -> Optional[Character]:
@@ -70,6 +75,13 @@ class MaterialService:
             data = material.model_dump()
             if data.get('content') is None:
                 data['content'] = ''
+            if not data['content'] and data.get('content_url'):
+                import os
+                import aiofiles
+                file_path = os.path.join(settings.MATERIALS_DIR, data['content_url'])
+                if os.path.exists(file_path):
+                    async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
+                        data['content'] = await f.read()
             return await uow.materials.create(data)
 
     @staticmethod
@@ -104,6 +116,13 @@ class ConversationService:
     @staticmethod
     async def create(conversation: ConversationCreate) -> Conversation:
         async with UnitOfWork() as uow:
+            character = await uow.characters.get_by_id(conversation.character_id)
+            if not character:
+                raise ValueError(f"角色不存在")
+            if conversation.material_id:
+                material = await uow.materials.get_by_id(conversation.material_id)
+                if not material:
+                    raise ValueError(f"教材不存在")
             return await uow.conversations.create(conversation.model_dump())
 
     @staticmethod

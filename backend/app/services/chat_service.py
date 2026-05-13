@@ -307,6 +307,16 @@ class ChatService:
                 if os.path.exists(file_path):
                     async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
                         material_content = await f.read()
+                    if not material_content:
+                        raise ValueError(
+                            f"教材「{conversation.material.title}」的内容为空，PDF 可能无法提取文字（如扫描版），"
+                            f"请转换为文本格式后重新上传"
+                        )
+                else:
+                    raise ValueError(
+                        f"教材「{conversation.material.title}」的文件未找到（{conversation.material.content_url}），"
+                        f"请重新上传教材文件"
+                    )
             
             if not material_content:
                 raise ValueError(f"教材「{conversation.material.title}」没有内容。请检查教材是否已上传文件，或内容是否为空。")

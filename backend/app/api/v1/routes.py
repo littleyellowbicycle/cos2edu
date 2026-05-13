@@ -82,7 +82,10 @@ async def get_character(request: Request, character_id: int):
 @router.post("/characters", response_model=CharacterResponse)
 @limiter.limit("20/minute")
 async def create_character(request: Request, character: CharacterCreate):
-    return await CharacterService.create(character)
+    try:
+        return await CharacterService.create(character)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/characters/multipart", response_model=CharacterResponse)
@@ -257,14 +260,25 @@ async def upload_material(request: Request, file: UploadFile = File(...)):
     content = await file.read()
     
     if file_ext == '.pdf':
-        from PyPDF2 import PdfReader
-        pdf_reader = PdfReader(io.BytesIO(content))
+        try:
+            import pdfplumber
+        except ImportError:
+            raise HTTPException(
+                status_code=500,
+                detail="PDF解析库未安装，请联系管理员安装 pdfplumber"
+            )
         text_parts = []
-        for page in pdf_reader.pages:
-            page_text = page.extract_text()
-            if page_text:
-                text_parts.append(page_text)
+        with pdfplumber.open(io.BytesIO(content)) as pdf:
+            for page in pdf.pages:
+                page_text = page.extract_text()
+                if page_text:
+                    text_parts.append(page_text)
         text = '\n'.join(text_parts)
+        if not text.strip():
+            raise HTTPException(
+                status_code=400,
+                detail="PDF文件无法提取文字内容，可能是扫描版或图片型PDF，请尝试转换为文本格式后上传"
+            )
     else:
         try:
             text = content.decode('utf-8')
@@ -404,7 +418,10 @@ async def get_conversation(request: Request, conversation_id: int):
 @router.post("/conversations", response_model=CreateConversationResponse)
 @limiter.limit("30/minute")
 async def create_conversation(request: Request, conversation: ConversationCreate):
-    return await ConversationService.create(conversation)
+    try:
+        return await ConversationService.create(conversation)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.put("/conversations/{conversation_id}", response_model=CreateConversationResponse)

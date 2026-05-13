@@ -51,6 +51,7 @@ class BaseRepository(IRepository[ModelType]):
     async def create(self, obj_in: dict) -> ModelType:
         db_obj = self.model(**obj_in)
         self.session.add(db_obj)
+        await self.session.flush()
         return db_obj
 
     async def update(self, db_obj: ModelType, obj_in: dict) -> ModelType:
