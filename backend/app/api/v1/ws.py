@@ -95,7 +95,7 @@ async def websocket_endpoint(
                         await websocket.send_text(event_str)
 
                 except Exception as e:
-                    logger.error(f"Chat error: {e}")
+                    logger.error(f"Chat error: {e}", exc_info=True)
                     await websocket.send_text(json.dumps({
                         "type": "error",
                         "content": str(e),
@@ -119,6 +119,75 @@ async def websocket_endpoint(
                         },
                     }, ensure_ascii=False))
 
+            elif msg_type == "action.choose":
+                option_id = payload.get("option_id", "")
+                event_id = payload.get("event_id", "")
+                engine = get_narrative_engine()
+                if engine:
+                    await engine.state_manager.update("narrative_choice", {
+                        "flag_key": f"choice_{event_id}",
+                        "flag_value": option_id,
+                    })
+                    await websocket.send_text(json.dumps({
+                        "type": "event.resolved",
+                        "payload": {"event_id": event_id, "chosen_option": option_id},
+                    }, ensure_ascii=False))
+
+            elif msg_type == "syllabus.confirm":
+                material_id = payload.get("material_id")
+                if material_id:
+                    from app.tasks.material_pipeline import process_material
+                    from app.repositories.unit_of_work import UnitOfWork
+                    async with UnitOfWork() as uow:
+                        material = await uow.materials.get_by_id(material_id)
+                        if material:
+                            await uow.materials.update(material, {
+                                "status": "ready",
+                                "review_status": "approved",
+                            })
+                    await websocket.send_text(json.dumps({
+                        "type": "material.status_changed",
+                        "payload": {
+                            "material_id": material_id,
+                            "status": "ready",
+                            "progress": 100,
+                            "progress_message": "结构化教学已开启",
+                            "capabilities": {
+                                "free_chat": True,
+                                "structured_mode": True,
+                                "exercises": True,
+                                "progress_tracking": True,
+                            },
+                        },
+                    }, ensure_ascii=False))
+
+            elif msg_type == "syllabus.reject":
+                material_id = payload.get("material_id")
+                if material_id:
+                    from app.repositories.unit_of_work import UnitOfWork
+                    async with UnitOfWork() as uow:
+                        material = await uow.materials.get_by_id(material_id)
+                        if material:
+                            await uow.materials.update(material, {
+                                "status": "indexed",
+                                "review_status": "rejected",
+                            })
+                    await websocket.send_text(json.dumps({
+                        "type": "material.status_changed",
+                        "payload": {
+                            "material_id": material_id,
+                            "status": "indexed",
+                            "progress": 100,
+                            "progress_message": "大纲已拒绝，使用自由对话模式",
+                            "capabilities": {
+                                "free_chat": True,
+                                "structured_mode": False,
+                                "exercises": False,
+                                "progress_tracking": False,
+                            },
+                        },
+                    }, ensure_ascii=False))
+
             else:
                 await websocket.send_text(json.dumps({
                     "type": "error",
@@ -128,7 +197,7 @@ async def websocket_endpoint(
     except WebSocketDisconnect:
         logger.info(f"WebSocket disconnected: {client_id}")
     except Exception as e:
-        logger.error(f"WebSocket error: {e}")
+        logger.error(f"WebSocket error: {e}", exc_info=True)
         try:
             await websocket.close(code=1011, reason=str(e))
         except Exception:

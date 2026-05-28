@@ -6,8 +6,11 @@ from app.graph.knowledge_graph import KnowledgeGraph
 from app.engines.world_state_engine import WorldStateEngine
 from app.engines.teaching_engine import TeachingEngine
 from app.engines.character_engine import CharacterEngine
+from app.engines.emotion_engine import EmotionEngine, EmotionUpdate
+from app.engines.event_engine import EventEngine, TriggeredEvent
 from app.state.state_manager import StateManager
 from app.services.chat_service import ChatService
+from app.services.rag_service import get_rag_service
 from app.repositories.unit_of_work import UnitOfWork
 from app.core.logging_config import get_logger
 
@@ -24,12 +27,17 @@ class NarrativeEngine:
         character_engine: CharacterEngine,
         teaching_engine: TeachingEngine,
         state_manager: StateManager,
+        emotion_engine: EmotionEngine = None,
+        event_engine: EventEngine = None,
     ):
         self.graph = knowledge_graph
         self.world = world_state_engine
         self.characters = character_engine
         self.teaching = teaching_engine
         self.state_manager = state_manager
+        self.emotion = emotion_engine
+        self.events = event_engine
+        self.rag = get_rag_service()
 
     async def handle_chat_message(
         self,
@@ -38,7 +46,7 @@ class NarrativeEngine:
         character_id: str,
         model_config=None,
     ) -> AsyncIterator[str]:
-        """处理聊天消息，返回 SSE 事件流"""
+        """处理聊天消息，返回事件流 (以 JSON 行分隔)"""
         try:
             async with UnitOfWork() as uow:
                 conversation = await uow.conversations.get_by_id(conversation_id)
@@ -57,9 +65,14 @@ class NarrativeEngine:
                 scene = self.world.get_current_scene()
 
                 emotion_summary = "平静、专注"
+                if self.emotion:
+                    mood = self.emotion.get_mood(character_id)
+                    emotion_summary = self._mood_to_description(mood)
 
                 rag_context = ""
-                if conversation.material and conversation.material.content:
+                if self.rag.is_ready:
+                    rag_context = self.rag.get_context(user_message, max_tokens=1500)
+                if not rag_context and conversation.material and conversation.material.content:
                     rag_context = conversation.material.content[:2000]
 
                 history_messages = []
@@ -84,30 +97,91 @@ class NarrativeEngine:
                         rag_context=rag_context,
                     )
 
-                config_dict = None
-                if model_config:
-                    config_dict = {
-                        "provider": model_config.provider,
-                        "model_name": model_config.model_name,
-                        "api_key": model_config.api_key,
-                        "base_url": model_config.base_url,
-                        "group_id": getattr(model_config, "group_id", None),
-                    }
-
                 full_response = ""
-                async for chunk in ChatService.chat_stream(
-                    conversation_id=conversation_id,
-                    user_message=user_message,
-                    model_config=model_config,
-                ):
-                    full_response += chunk if not chunk.startswith("data:") else ""
-                    yield json.dumps({"type": "chat.token", "content": chunk}, ensure_ascii=False)
+                try:
+                    async for chunk in ChatService.chat_stream(
+                        conversation_id=conversation_id,
+                        user_message=user_message,
+                        model_config=model_config,
+                    ):
+                        full_response += chunk if not chunk.startswith("data:") else ""
+                        yield json.dumps({"type": "chat.token", "content": chunk}, ensure_ascii=False)
+                except ValueError as e:
+                    yield json.dumps({"type": "error", "content": str(e)}, ensure_ascii=False)
+                    return
 
                 yield json.dumps({"type": "chat.complete", "content": full_response}, ensure_ascii=False)
 
+                # Phase 1.5: Emotion update
+                if self.emotion:
+                    self._update_emotion_after_response(character_id, full_response, user_message)
+                    emotion_update = self.emotion.update(character_id, "student_engaged", 0.05)
+                    if emotion_update:
+                        yield json.dumps({
+                            "type": "emotion.update",
+                            "payload": {
+                                "character_id": character_id,
+                                "mood": emotion_update.mood,
+                                "mood_delta": emotion_update.mood_delta,
+                                "cause": emotion_update.cause,
+                                "expression": emotion_update.expression,
+                            },
+                        }, ensure_ascii=False)
+                        await self.state_manager.update("mood_change", {
+                            "character_id": int(character_id) if character_id.isdigit() else 1,
+                            "mood": emotion_update.mood,
+                        })
+
+                # Phase 1.5: Check for events
+                if self.events:
+                    world_snap = self.world.get_full_snapshot()
+                    event_list = self.events.check_time_events(world_snap.get("current_day", 1))
+                    for event in event_list:
+                        yield json.dumps({
+                            "type": "event.trigger",
+                            "payload": {
+                                "event_id": event.event_id,
+                                "title": event.name,
+                                "description": event.description,
+                                "scene_change": event.scene_change,
+                            },
+                        }, ensure_ascii=False)
+                        if event.scene_change:
+                            new_scene = self.world.switch_scene(event.scene_change)
+                            await self.state_manager.update("scene_change", {
+                                "scene_id": event.scene_change,
+                            })
+
         except Exception as e:
-            logger.error(f"NarrativeEngine chat error: {e}")
+            logger.error(f"NarrativeEngine chat error: {e}", exc_info=True)
             yield json.dumps({"type": "error", "content": str(e)}, ensure_ascii=False)
+
+    def _mood_to_description(self, mood: float) -> str:
+        if mood > 0.85:
+            return "非常开心和兴奋"
+        elif mood > 0.7:
+            return "温和且专注"
+        elif mood > 0.5:
+            return "平静，略带思考"
+        elif mood > 0.3:
+            return "有些严肃"
+        else:
+            return "有些担心和不安"
+
+    def _update_emotion_after_response(self, character_id: str, response: str, user_msg: str) -> None:
+        """根据对话内容简单判断情感变化方向"""
+        user_lower = user_msg.lower()
+        positive_words = ["对", "是的", "正确", "明白了", "懂了", "谢谢", "yes", "right"]
+        negative_words = ["不懂", "不理解", "错", "不会", "困难", "confused", "wrong"]
+
+        has_positive = any(w in user_lower for w in positive_words)
+        has_negative = any(w in user_lower for w in negative_words)
+
+        if self.emotion:
+            if has_positive:
+                self.emotion.update(character_id, "student_correct", 0.05)
+            elif has_negative:
+                self.emotion.update(character_id, "student_wrong", -0.02)
 
     def _build_default_prompt(
         self,
@@ -143,31 +217,45 @@ class NarrativeEngine:
         """返回完整状态快照，用于 WS 重连对账"""
         world_snapshot = self.world.get_full_snapshot()
 
-        async with UnitOfWork() as uow:
-            from models.character_state import CharacterState
-            from sqlalchemy import select
-            result = await uow.session.execute(select(CharacterState))
-            char_states = result.scalars().all()
-            characters_snapshot = {}
-            for cs in char_states:
-                char = self.characters.get_character(str(cs.character_id))
-                characters_snapshot[str(cs.character_id)] = {
-                    "name": char.name if char else str(cs.character_id),
-                    "mood": cs.current_mood,
-                    "trust_level": cs.trust_level,
-                }
+        characters_snapshot = {}
+        if self.emotion:
+            for cid, cdata in self.emotion.get_all_states().items():
+                characters_snapshot[cid] = cdata
+        else:
+            async with UnitOfWork() as uow:
+                from models.character_state import CharacterState
+                from sqlalchemy import select
+                result = await uow.session.execute(select(CharacterState))
+                char_states = result.scalars().all()
+                for cs in char_states:
+                    char = self.characters.get_character(str(cs.character_id))
+                    characters_snapshot[str(cs.character_id)] = {
+                        "name": char.name if char else str(cs.character_id),
+                        "mood": cs.current_mood,
+                        "trust_level": cs.trust_level,
+                    }
 
+        async with UnitOfWork() as uow:
             mastered = await self._get_mastered_points(uow)
             all_points = self.graph.get_all_points()
             unlocked = self.graph.get_next_unlocked(mastered)
+
+        current_point = unlocked[0] if unlocked else None
+        point_meta = self.graph.get_point(current_point) if current_point else None
 
         return {
             "world": world_snapshot,
             "characters": characters_snapshot,
             "progress": {
-                "mastered_count": len(mastered),
-                "total_count": len(all_points),
-                "mastered_points": list(mastered),
-                "next_point": unlocked[0] if unlocked else None,
+                "currentPoint": current_point,
+                "currentPointName": point_meta.name if point_meta else None,
+                "status": "learning" if current_point else "completed",
+                "mastery": 0,
+                "completedPoints": len(mastered),
+                "totalPoints": len(all_points),
+                "masteredPoints": list(mastered),
+                "next_point": unlocked[1] if len(unlocked) > 1 else None,
             },
+            "activeEvents": [],
+            "narrativeChoices": None,
         }

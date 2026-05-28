@@ -11,6 +11,8 @@
           <span v-else-if="isTyping">正在思考...</span>
           <span v-else-if="sending">发送中...</span>
           <span v-else>苏格拉底式对话中</span>
+          <span v-if="currentScene" class="scene-badge">{{ currentScene }}</span>
+          <span v-if="moodLabel" class="mood-badge" :class="moodBadgeClass">{{ moodLabel }}</span>
         </p>
       </div>
       <button class="btn-sidebar" @click="showSidebar = !showSidebar" :aria-expanded="showSidebar">
@@ -108,7 +110,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick, watch } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, watch, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import api from '@/api'
 import { ElMessage } from 'element-plus'
@@ -116,6 +118,8 @@ import katex from 'katex'
 import 'katex/dist/katex.min.css'
 import mermaid from 'mermaid'
 import { marked } from 'marked'
+import { useWebSocket } from '@/composables/useWebSocket'
+import { useNarrativeStore } from '@/stores/narrative'
 
 marked.setOptions({
   breaks: true,
@@ -184,6 +188,8 @@ mermaid.initialize({
 })
 
 const route = useRoute()
+const ws = useWebSocket()
+const narrativeStore = useNarrativeStore()
 const messages = ref([])
 const inputMessage = ref('')
 const sending = ref(false)
@@ -195,10 +201,49 @@ const conversationId = ref(route.query.conversationId || null)
 const characterName = ref('')
 const characterAvatar = ref('')
 const characterAvatarType = ref('emoji')
+const characterId = ref('')
 const conversationHistory = ref([])
 const loading = ref(false)
 const messageRefs = {}
 const materialTitle = ref('')
+
+const characterMood = computed(() => {
+  const cid = characterId.value
+  if (cid && narrativeStore.characters[cid]) {
+    return narrativeStore.characters[cid].mood
+  }
+  return null
+})
+
+const characterExpression = computed(() => {
+  const cid = characterId.value
+  if (cid && narrativeStore.characters[cid]) {
+    return narrativeStore.characters[cid].lastExpression || ''
+  }
+  return ''
+})
+
+const moodLabel = computed(() => {
+  const m = characterMood.value
+  if (m === null) return ''
+  if (m > 0.85) return '非常开心'
+  if (m > 0.7) return '温和专注'
+  if (m > 0.5) return '平静'
+  if (m > 0.3) return '有些严肃'
+  return '有些担心'
+})
+
+const moodBadgeClass = computed(() => {
+  const m = characterMood.value
+  if (m === null) return ''
+  if (m > 0.7) return 'mood-positive'
+  if (m > 0.5) return 'mood-neutral'
+  return 'mood-negative'
+})
+
+const currentScene = computed(() => narrativeStore.world.sceneName || '')
+
+let wsUnsubFns = []
 
 function getAvatarDisplay() {
   if (characterAvatarType.value === 'emoji' && characterAvatar.value) {
@@ -215,7 +260,7 @@ function getAvatarStyle() {
 }
 
 onMounted(async () => {
-  const characterId = route.params.id
+  characterId.value = route.params.id
   if (conversationId.value) {
     loading.value = true
     await loadConversation({ id: conversationId.value })
@@ -223,7 +268,7 @@ onMounted(async () => {
   }
   
   try {
-    const character = await api.characters.getById(characterId)
+    const character = await api.characters.getById(characterId.value)
     characterName.value = character.name
     characterAvatar.value = character.avatar || ''
     characterAvatarType.value = character.avatar_type || 'emoji'
@@ -237,6 +282,57 @@ onMounted(async () => {
   } catch (e) {
     console.error(e)
   }
+
+  ws.connect()
+  wsUnsubFns.push(ws.on('chat.token', (msg) => {
+    const content = msg.content || ''
+    if (content.startsWith('data:')) return
+    const lastIdx = messages.value.length - 1
+    if (lastIdx >= 0 && messages.value[lastIdx].role === 'assistant') {
+      messages.value[lastIdx].content += content
+    }
+  }))
+  wsUnsubFns.push(ws.on('chat.complete', () => {
+    sending.value = false
+    isTyping.value = false
+  }))
+  wsUnsubFns.push(ws.on('error', (msg) => {
+    sending.value = false
+    isTyping.value = false
+    const errContent = msg.content || msg.payload?.content || '通信错误'
+    if (errContent.includes('API Key') || errContent.includes('模型')) {
+      ElMessage({
+        type: 'warning',
+        message: '请先配置 AI 模型。点击右上角「设置」进行配置。',
+        duration: 0,
+        showClose: true
+      })
+    } else {
+      ElMessage.error(errContent)
+    }
+  }))
+  wsUnsubFns.push(ws.on('emotion.update', (msg) => {
+    narrativeStore.updateEmotion(msg.payload)
+  }))
+  wsUnsubFns.push(ws.on('scene.change', (msg) => {
+    narrativeStore.updateSceneChange(msg.payload)
+  }))
+  wsUnsubFns.push(ws.on('event.trigger', (msg) => {
+    if (msg.payload) {
+      narrativeStore.activeEvents.push(msg.payload)
+    }
+  }))
+  wsUnsubFns.push(ws.on('state.full', (msg) => {
+    narrativeStore.overwriteState(msg.payload)
+  }))
+
+  narrativeStore.setConnectionState(ws.connectionState.value)
+})
+
+onUnmounted(() => {
+  wsUnsubFns.forEach(fn => fn())
+  wsUnsubFns = []
+  ws.disconnect()
 })
 
 watch(messages, async () => {
@@ -270,65 +366,16 @@ async function sendMessage() {
   try {
     if (!conversationId.value) {
       const conv = await api.conversations.create({
-        character_id: route.params.id,
+        character_id: characterId.value,
         title: `与 ${characterName.value} 的对话`
       })
       conversationId.value = conv.id
     }
 
-    const response = await fetch(`/api/v1/chat/${conversationId.value}/stream`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: userMessage })
-    })
-
-    if (!response.ok) {
-      throw new Error('请求失败')
-    }
-
-    const reader = response.body.getReader()
-    const decoder = new TextDecoder()
-    let aiResponse = ''
-    let firstChunk = true
-
     messages.value.push({ role: 'assistant', content: '', timestamp: new Date() })
-    const aiIndex = messages.value.length - 1
-    let hasError = false
-    let errorMsg = ''
+    isTyping.value = false
 
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      
-      const chunk = decoder.decode(value)
-      const lines = chunk.split('\n')
-      
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          try {
-            const data = JSON.parse(line.slice(6))
-            if (data.error) {
-              hasError = true
-              errorMsg = data.error
-            } else if (data.content) {
-              if (firstChunk) {
-                isTyping.value = false
-                firstChunk = false
-              }
-              aiResponse += data.content
-              messages.value[aiIndex].content = aiResponse
-            }
-          } catch (e) {
-            // Ignore parse errors for partial data
-          }
-        }
-      }
-    }
-    
-    if (hasError) {
-      messages.value[aiIndex].content = ''
-      throw new Error(errorMsg)
-    }
+    ws.sendChat(conversationId.value, userMessage, characterId.value)
   } catch (e) {
     let errorMsg = e.message || '发送失败'
     
@@ -344,7 +391,6 @@ async function sendMessage() {
       ElMessage.error(errorMsg)
     }
     messages.value.pop()
-  } finally {
     sending.value = false
     isTyping.value = false
   }
@@ -437,6 +483,43 @@ function formatDate(dateStr) {
 .chat-status {
   font-size: 14px;
   color: var(--color-text-muted);
+}
+
+.scene-badge {
+  display: inline-block;
+  font-size: 12px;
+  padding: 2px 8px;
+  margin-left: 8px;
+  background: var(--color-bg-warm);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  color: var(--color-text);
+}
+
+.mood-badge {
+  display: inline-block;
+  font-size: 12px;
+  padding: 2px 8px;
+  margin-left: 6px;
+  border-radius: 12px;
+}
+
+.mood-positive {
+  background: #e8f5e9;
+  color: #2e7d32;
+  border: 1px solid #a5d6a7;
+}
+
+.mood-neutral {
+  background: #fff3e0;
+  color: #e65100;
+  border: 1px solid #ffcc80;
+}
+
+.mood-negative {
+  background: #ffebee;
+  color: #c62828;
+  border: 1px solid #ef9a9a;
 }
 
 .btn-sidebar {

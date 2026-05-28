@@ -45,6 +45,7 @@
             <p class="card-description">{{ char.description || '暂无描述' }}</p>
             <div class="card-tags">
               <span class="tag" v-if="char.personality">{{ char.personality }}</span>
+              <span class="mood-tag" :class="getCharacterMoodClass(char)" v-if="getCharacterMoodLabel(char)">{{ getCharacterMoodLabel(char) }}</span>
             </div>
           </div>
           <div class="card-actions">
@@ -221,11 +222,15 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useCharacterStore } from '@/stores/character'
+import { useNarrativeStore } from '@/stores/narrative'
+import { useWebSocket } from '@/composables/useWebSocket'
 import { ElMessage } from 'element-plus'
 import api from '@/api'
 
 const router = useRouter()
 const store = useCharacterStore()
+const narrativeStore = useNarrativeStore()
+const ws = useWebSocket()
 const characters = ref([])
 const showCreateDialog = ref(false)
 const editingCharacter = ref(null)
@@ -235,6 +240,39 @@ const showMaterialDialog = ref(false)
 const selectedMaterialId = ref(null)
 const selectedChar = ref(null)
 const materialSearch = ref('')
+
+onMounted(async () => {
+  ws.connect()
+  ws.requestStateSync()
+  try {
+    await store.fetchAll()
+    characters.value = store.characters
+  } finally {
+    loading.value = false
+  }
+})
+
+function getCharacterMood(char) {
+  return narrativeStore.characters[char.id]?.mood ?? null
+}
+
+function getCharacterMoodLabel(char) {
+  const m = getCharacterMood(char)
+  if (m === null) return ''
+  if (m > 0.85) return '非常开心'
+  if (m > 0.7) return '温和专注'
+  if (m > 0.5) return '平静'
+  if (m > 0.3) return '有些严肃'
+  return '有些担心'
+}
+
+function getCharacterMoodClass(char) {
+  const m = getCharacterMood(char)
+  if (m === null) return ''
+  if (m > 0.7) return 'mood-positive'
+  if (m > 0.5) return 'mood-neutral'
+  return 'mood-negative'
+}
 
 const filteredMaterials = computed(() => {
   if (!materialSearch.value) return materials.value
@@ -762,6 +800,31 @@ function closeDialog() {
   color: var(--color-text-muted);
   border-radius: 20px;
   border: 1px solid var(--color-border);
+}
+
+.mood-tag {
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-weight: 500;
+}
+
+.mood-tag.mood-positive {
+  background: #e8f5e9;
+  color: #2e7d32;
+  border: 1px solid #a5d6a7;
+}
+
+.mood-tag.mood-neutral {
+  background: #fff3e0;
+  color: #e65100;
+  border: 1px solid #ffcc80;
+}
+
+.mood-tag.mood-negative {
+  background: #ffebee;
+  color: #c62828;
+  border: 1px solid #ef9a9a;
 }
 
 .card-actions {
