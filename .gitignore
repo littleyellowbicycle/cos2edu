@@ -17,6 +17,7 @@ data/characters/
 data/materials/
 data/conversations/
 data/uploads/
+backend/data/
 
 # IDE
 .vscode/
@@ -36,6 +37,7 @@ Thumbs.db
 # Node
 node_modules/
 frontend/dist/
+frontend/node_modules/
 
 # Uploads
 *.bak
