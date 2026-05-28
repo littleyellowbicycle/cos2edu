@@ -1,0 +1,71 @@
+world:
+  name: "AI 学院"
+  time_scale: 1
+  start_scene: "classroom"
+  narrative_tone: "轻科幻校园风"
+  description: "一座建在数据海洋之上的学院，用苏格拉底式的方式引导学生学习AI和机器学习"
+
+scenes:
+  - id: "classroom"
+    name: "教室"
+    description: "明亮的教室，窗外是数据流构成的城市天际线。黑板上显示着今天的知识点。"
+    allowed_actions: ["teach", "question", "discuss", "practice"]
+    mood_modifier: 0.0
+    bg_color: "#1a1a2e"
+
+  - id: "debate_hall"
+    name: "辩论厅"
+    description: "圆形辩论场，中央全息投影显示着争议主题。你和老师各持一方，用论据说服对方。"
+    allowed_actions: ["debate", "present", "question"]
+    mood_modifier: -0.05
+    bg_color: "#16213e"
+
+  - id: "exam_room"
+    name: "考核室"
+    description: "安静的考核室，倒计时在墙上缓缓跳动。只有真正的理解才能通过。"
+    allowed_actions: ["exam", "review"]
+    mood_modifier: -0.1
+    bg_color: "#0f3460"
+
+  - id: "lounge"
+    name: "休息区"
+    description: "舒适的休息区，可以自由提问和讨论。今天的知识点在壁画上隐约浮现。"
+    allowed_actions: ["question", "discuss", "review"]
+    mood_modifier: +0.05
+    bg_color: "#1a1a2e"
+
+time_events:
+  - id: "phase1_review"
+    name: "阶段1回顾测验"
+    trigger_day: 30
+    description: "转眼间已经学了一个月了！老师决定来一次小测验，看看你掌握了多少。"
+    scene_change: "exam_room"
+    condition: null
+
+  - id: "phase2_review"
+    name: "阶段2挑战赛"
+    trigger_day: 60
+    description: "进阶阶段结束，是时候验证你的实力了！"
+    scene_change: "exam_room"
+    condition: null
+
+  - id: "final_exam"
+    name: "终极考试"
+    trigger_day: 90
+    description: "90天的学习之旅即将结束，最后的考试将决定你是否毕业。"
+    scene_change: "exam_room"
+    condition: null
+
+  - id: "encouragement"
+    name: "老师的小鼓励"
+    trigger_day: null
+    condition: "mastery_avg < 0.3 AND current_day > 15"
+    description: ""
+    description_template: "{character_name}注意到了你的困惑，给你讲了一个小故事来鼓励你继续前进。"
+
+  - id: "surprise_quiz"
+    name: "随机小测验"
+    trigger_day: null
+    condition: "random_probability < 0.05"
+    description: "突然来一个小测验，检验一下最近的学习成果！"
+    scene_change: "classroom"

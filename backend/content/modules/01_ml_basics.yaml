@@ -1,0 +1,58 @@
+id: ml_basics
+name: "机器学习基础"
+order: 1
+estimated_hours: 24
+prerequisites: []
+
+knowledge_points:
+  - id: what_is_ml
+    name: "什么是机器学习"
+    difficulty: 1
+    estimated_minutes: 30
+    key_concepts: ["监督学习", "无监督学习", "强化学习"]
+    teaching_hints:
+      ganyu: "从甘雨千年见证任务变化的故事讲起，说明'从经验中学习'的直觉"
+      keqing: "直接给出机器学习的数学定义和三大类别的精确定义"
+      march7th: "先写一个最简单的分类程序，再回过头解释这就是机器学习"
+    suggested_questions:
+      - "人学习和机器学习的本质区别是什么？"
+      - "为什么说'所有规则都手写'是不可持续的？"
+    exercises:
+      - type: "concept"
+        prompt: "举出3个日常生活中监督学习的例子，并说明输入和输出分别是什么"
+
+  - id: linear_regression
+    name: "线性回归"
+    difficulty: 2
+    estimated_minutes: 60
+    key_concepts: ["最小二乘法", "梯度下降", "损失函数"]
+    prerequisites: [what_is_ml]
+    teaching_hints:
+      ganyu: "用房价预测的例子建立直觉——面积越大价格越高，这是最自然的线性关系"
+      keqing: "从损失函数定义出发，推导最小二乘法的闭式解，再引出梯度下降"
+      march7th: "用NumPy手写线性回归，从数据生成开始，一步步实现"
+    suggested_questions:
+      - "为什么最小二乘法是最优的？最优的定义是什么？"
+      - "梯度下降的学习率如何选择？太大或太小会怎样？"
+    exercises:
+      - type: "coding"
+        prompt: "用NumPy实现线性回归，在波士顿房价数据集上训练"
+      - type: "calculation"
+        prompt: "手动计算一个2维线性回归的最小二乘解"
+
+  - id: classification
+    name: "分类问题"
+    difficulty: 2
+    estimated_minutes: 60
+    key_concepts: ["逻辑回归", "决策边界", "交叉熵损失"]
+    prerequisites: [linear_regression]
+    teaching_hints:
+      ganyu: "从线性回归到分类的过渡——为什么要用sigmoid把输出映射到0-1之间"
+      keqing: "直接给出交叉熵损失函数，推导其梯度，证明与线性回归梯度形式一致"
+      march7th: "写一个邮件垃圾分类器，用真实数据集验证效果"
+    suggested_questions:
+      - "为什么不用均方误差做分类的损失函数？"
+      - "逻辑回归是回归还是分类？为什么叫'回归'？"
+    exercises:
+      - type: "coding"
+        prompt: "实现逻辑回归分类器，在鸢尾花数据集上训练"

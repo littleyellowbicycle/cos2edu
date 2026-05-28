@@ -1,0 +1,61 @@
+id: neural_networks
+name: "神经网络基础"
+order: 2
+estimated_hours: 24
+prerequisites: [ml_basics]
+
+knowledge_points:
+  - id: perceptron
+    name: "感知机"
+    difficulty: 2
+    estimated_minutes: 45
+    key_concepts: ["线性分类", "激活函数", "损失函数"]
+    prerequisites: [classification]
+    teaching_hints:
+      ganyu: "从MP神经元的历史讲起，用生活中'是/否'判断的例子建立直觉"
+      keqing: "直接给出感知机的数学定义和更新公式，然后推导收敛性证明"
+      march7th: "先写代码实现一个感知机分类二维点，再回头解释原理"
+    suggested_questions:
+      - "如果数据不是线性可分的，感知机会发生什么？"
+      - "想一想，多个感知机组合起来能解决什么问题？"
+    exercises:
+      - type: "coding"
+        prompt: "使用NumPy实现一个感知机，对AND逻辑门进行分类"
+      - type: "concept"
+        prompt: "解释为什么感知机无法解决XOR问题"
+
+  - id: backpropagation
+    name: "反向传播算法"
+    difficulty: 4
+    estimated_minutes: 90
+    key_concepts: ["计算图", "链式法则", "梯度下降", "梯度消失"]
+    prerequisites: [perceptron]
+    teaching_hints:
+      ganyu: "从数学角度严格推导链式法则，确保每一步都清晰"
+      keqing: "将反向传播总结为'前向计算、计算损失、反向传播梯度、更新参数'四步骤"
+      march7th: "用PyTorch的backward()演示自动求导，让学生动手调参观察梯度变化"
+    suggested_questions:
+      - "如果网络很深，梯度会有什么变化？"
+      - "批归一化为什么能缓解梯度消失？"
+    exercises:
+      - type: "calculation"
+        prompt: "手动计算一个三层网络(2-3-1)的前向传播和反向传播"
+      - type: "coding"
+        prompt: "用NumPy实现一个简单的MLP，在MNIST上训练"
+
+  - id: activation_functions
+    name: "激活函数"
+    difficulty: 2
+    estimated_minutes: 30
+    key_concepts: ["ReLU", "Sigmoid", "Tanh", " dying ReLU"]
+    prerequisites: [perceptron]
+    teaching_hints:
+      ganyu: "将激活函数比作人脑神经元的兴奋阈值——超过阈值才'激活'"
+      keqing: "列出各激活函数的数学定义、导数和适用场景的对照表"
+      march7th: "在训练好的网络上可视化各层的激活值分布，直观理解梯度问题"
+    suggested_questions:
+      - "为什么ReLU比Sigmoid更常用？"
+      - "dying ReLU是什么？如何避免？"
+    exercises:
+      - type: "coding"
+        prompt: "实现Sigmoid、Tanh、ReLU及其导数，画出函数图像"

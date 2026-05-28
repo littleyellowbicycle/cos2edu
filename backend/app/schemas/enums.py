@@ -29,3 +29,34 @@ class ProviderType(str, Enum):
     GEMINI = "gemini"
     MINIMAX = "minimax"
     CUSTOM = "custom"
+
+
+class MaterialStatus(str, Enum):
+    UPLOADING = "uploading"
+    PARSING = "parsing"
+    PARSED = "parsed"
+    INDEXING = "indexing"
+    INDEXED = "indexed"
+    OUTLINING = "outlining"
+    PENDING_REVIEW = "pending_review"
+    READY = "ready"
+    FAILED = "failed"
+
+
+class KnowledgePointStatus(str, Enum):
+    LOCKED = "locked"
+    UNLOCKED = "unlocked"
+    LEARNING = "learning"
+    MASTERED = "mastered"
+
+
+class EventType(str, Enum):
+    TIME_BASED = "time_based"
+    CONDITION_BASED = "condition_based"
+    RANDOM = "random"
+
+
+class ReviewStatus(str, Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"

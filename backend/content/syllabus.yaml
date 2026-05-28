@@ -1,0 +1,14 @@
+course:
+  name: "AI 机器学习入门"
+  total_days: 90
+  description: "从零开始学习机器学习与深度基础的90天计划"
+  phases:
+    - name: "基础阶段"
+      days: [1, 30]
+      modules: [ml_basics, python_ml, math_review]
+    - name: "进阶阶段"
+      days: [31, 60]
+      modules: [neural_networks, deep_learning, cv_basics]
+    - name: "实战阶段"
+      days: [61, 90]
+      modules: [nlp_basics, project_practice]

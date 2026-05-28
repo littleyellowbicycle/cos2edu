@@ -7,6 +7,10 @@ from .conversation_repository import ConversationRepository
 from .message_repository import MessageRepository
 from .model_config_repository import ModelConfigRepository
 from .background_config_repository import BackgroundConfigRepository
+from .learning_progress_repository import LearningProgressRepository
+from .world_state_repository import WorldStateRepository
+from .character_state_repository import CharacterStateRepository
+from .syllabus_repository import SyllabusRepository
 
 
 class UnitOfWork:
@@ -43,6 +47,22 @@ class UnitOfWork:
     @property
     def background_configs(self) -> BackgroundConfigRepository:
         return BackgroundConfigRepository(self.session)
+
+    @property
+    def learning_progress(self) -> LearningProgressRepository:
+        return LearningProgressRepository(self.session)
+
+    @property
+    def world_state(self) -> WorldStateRepository:
+        return WorldStateRepository(self.session)
+
+    @property
+    def character_state(self) -> CharacterStateRepository:
+        return CharacterStateRepository(self.session)
+
+    @property
+    def syllabuses(self) -> SyllabusRepository:
+        return SyllabusRepository(self.session)
 
     async def commit(self):
         if self._session:
