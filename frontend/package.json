@@ -16,11 +16,11 @@
     "marked": "^18.0.3",
     "mermaid": "^11.14.0",
     "pinia": "^2.1.7",
-    "vue": "^3.4.21",
+    "vue": "^3.5.34",
     "vue-router": "^4.3.0"
   },
   "devDependencies": {
-    "@vitejs/plugin-vue": "^5.0.4",
+    "@vitejs/plugin-vue": "^5.2.4",
     "vite": "^5.2.8"
   }
 }

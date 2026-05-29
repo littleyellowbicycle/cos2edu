@@ -2,7 +2,7 @@
   <div class="dashboard-page">
     <div class="dashboard-header">
       <h1>学习中心</h1>
-      <p class="welcome-text">{{ greeting }}，{{ userStore.displayName }}</p>
+      <p class="welcome-text">{{ greeting }}，欢迎回来</p>
     </div>
 
     <div v-if="loading" class="loading-container">
@@ -95,10 +95,8 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { CircleCheck, Loading, Lock, TrendCharts } from '@element-plus/icons-vue'
-import { useUserStore } from '@/stores/user'
 import api from '@/api'
 
-const userStore = useUserStore()
 const loading = ref(true)
 const dashboardData = ref(null)
 
@@ -135,7 +133,7 @@ function statusLabel(status) {
 
 onMounted(async () => {
   try {
-    dashboardData.value = await api.get('/auth/dashboard/student')
+    dashboardData.value = await api.get('/curriculum/progress-summary')
   } catch (e) {
     console.error('Failed to load dashboard:', e)
   } finally {

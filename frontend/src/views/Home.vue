@@ -12,8 +12,6 @@
         <div class="hero-actions">
           <router-link to="/characters" class="btn btn-primary">开始探索</router-link>
           <router-link to="/dashboard" class="btn btn-secondary">学习中心</router-link>
-          <router-link v-if="!isLoggedIn" to="/login" class="btn btn-secondary">登录</router-link>
-          <button v-if="isLoggedIn" class="btn btn-ghost" @click="handleLogout">退出</button>
         </div>
       </div>
       <div class="hero-decoration">
@@ -65,18 +63,6 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
-import { useRouter } from 'vue-router'
-import { useUserStore } from '@/stores/user'
-
-const router = useRouter()
-const userStore = useUserStore()
-const isLoggedIn = computed(() => userStore.isLoggedIn)
-
-function handleLogout() {
-  userStore.logout()
-  router.push('/login')
-}
 </script>
 
 <style scoped>

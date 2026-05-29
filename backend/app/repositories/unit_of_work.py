@@ -11,7 +11,6 @@ from .learning_progress_repository import LearningProgressRepository
 from .world_state_repository import WorldStateRepository
 from .character_state_repository import CharacterStateRepository
 from .syllabus_repository import SyllabusRepository
-from .user_repository import UserRepository
 
 
 class UnitOfWork:
@@ -64,10 +63,6 @@ class UnitOfWork:
     @property
     def syllabuses(self) -> SyllabusRepository:
         return SyllabusRepository(self.session)
-
-    @property
-    def users(self) -> UserRepository:
-        return UserRepository(self.session)
 
     async def commit(self):
         if self._session:

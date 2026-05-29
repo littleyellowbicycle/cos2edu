@@ -65,36 +65,27 @@
 
 ---
 
-## Phase 3.0 — 多学生协作 📋
+## Phase 3.0 — 单用户体验优化 ✅
 
-> 状态：进行中
+> 状态：已完成（从多用户认证改为单用户桌面应用）
 
-- [x] 用户模型：User (id, username, email, hashed_password, display_name, role, avatar, is_active)
-- [x] JWT 认证：bcrypt 密码哈希 + python-jose JWT token
-- [x] Auth API：register, login, me (GET/PUT), change-password, admin user list
-- [x] Auth middleware：get_current_user, require_role("admin"/"teacher")
-- [x] 现有模型关联：Conversation.user_id, LearningProgress.user_id
-- [x] 前端 Auth store：useUserStore (login/register/logout/profile)
-- [x] 前端 API interceptor：Authorization Bearer token 注入 + 401 自动跳转登录
-- [x] 前端 Login.vue：登录/注册页面（JWT 认证）
-- [x] 前端路由守卫：beforeEach 拦截未登录用户重定向 /login
-- [x] WS 认证：token query param 传参，后端 decode_token 解析 user_id
-- [ ] Student dashboard：学习分析仪表盘
-- [ ] Teacher dashboard：班级概览、学生进度
-- [x] Conversation list scoped to user_id (ConversationRepository.get_by_user)
-- [x] Student dashboard API + Vue view (progress summary, point details, mastery)
-- [x] Teacher dashboard API + Vue view (student progress overview)
-- [ ] 对话历史搜索与管理增强
+- [x] 学习进度 Dashboard：GET /curriculum/progress-summary（无认证）
+- [x] Dashboard.vue：学习统计卡片 + 知识点掌握度表格
+- [x] Home.vue：学习中心入口
+- [x] ~~JWT 认证系统~~ （已移除，单人桌面应用无需认证）
+- [x] ~~User 模型 / Login.vue / useUserStore / 路由守卫~~ （已移除）
+- [x] ~~Teacher Dashboard~~ （已移除，教师是虚拟角色非真实用户）
 
 ---
 
-## Phase 4.0 — 插件与自定义 🔮
+## Phase 4.0 — 打磨与增强 🔮
 
 > 状态：未开始
 
-- [ ] Plugin 系统
-- [ ] 自定义世界观编辑器（前端 YAML 编辑器）
+- [ ] 对话历史搜索与管理增强
+- [ ] 世界观 YAML 编辑器（前端可视化编辑课程内容）
 - [ ] 角色创建向导（支持自定义头像、人格模板）
+- [ ] 世界观/角色热重载
 - [ ] 国际化 i18n
 
 ---

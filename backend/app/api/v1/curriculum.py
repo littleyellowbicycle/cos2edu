@@ -247,3 +247,39 @@ async def get_point_progress(request: Request, point_id: str):
                 "last_reviewed_at": str(progress.last_reviewed_at) if progress.last_reviewed_at else None,
             }
         return {"point_id": point_id, "mastery_level": 0, "status": "locked", "attempts": 0}
+
+
+@router.get("/progress-summary")
+@limiter.limit("30/minute")
+async def get_progress_summary(request: Request):
+    """Get overall learning progress summary for the dashboard"""
+    async with UnitOfWork() as uow:
+        all_progress = await uow.learning_progress.get_all()
+
+    total = len(all_progress)
+    mastered = sum(1 for p in all_progress if p.status == "mastered")
+    learning = sum(1 for p in all_progress if p.status == "learning")
+    locked = sum(1 for p in all_progress if p.status == "locked")
+    avg_mastery = sum(p.mastery_level for p in all_progress) / max(total, 1)
+
+    point_details = []
+    for p in all_progress:
+        point_details.append({
+            "point_id": p.knowledge_point_id,
+            "status": p.status,
+            "mastery_level": round(p.mastery_level, 2),
+            "attempts": p.attempts,
+            "weak_areas": p.weak_areas or [],
+        })
+
+    return {
+        "progress_summary": {
+            "total_points": total,
+            "mastered": mastered,
+            "learning": learning,
+            "locked": locked,
+            "avg_mastery": round(avg_mastery, 2),
+            "completion_rate": round(mastered / max(total, 1) * 100, 1),
+        },
+        "point_details": point_details,
+    }

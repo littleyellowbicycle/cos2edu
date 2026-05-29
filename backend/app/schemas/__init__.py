@@ -9,7 +9,6 @@ from .message import MessageCreate, MessageResponse
 from .model_config import ModelConfigCreate, ModelConfigUpdate, ModelConfigResponse
 from .background_config import BackgroundConfigCreate, BackgroundConfigUpdate, BackgroundConfigResponse
 from .chat import ChatMessage
-from .user import UserRegister, UserLogin, UserResponse, TokenResponse, UserUpdate, PasswordChange
 
 __all__ = [
     "TeachingMode", "AvatarType", "BackgroundType", "ProviderType",
@@ -21,5 +20,4 @@ __all__ = [
     "ModelConfigCreate", "ModelConfigUpdate", "ModelConfigResponse",
     "BackgroundConfigCreate", "BackgroundConfigUpdate", "BackgroundConfigResponse",
     "ChatMessage",
-    "UserRegister", "UserLogin", "UserResponse", "TokenResponse", "UserUpdate", "PasswordChange",
 ]
