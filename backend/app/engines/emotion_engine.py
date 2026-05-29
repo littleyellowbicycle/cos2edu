@@ -152,3 +152,8 @@ class EmotionEngine:
                 "mood_trend": "stable",
             }
         return result
+
+    def reload(self, character_engine: CharacterEngine) -> None:
+        self._character_engine = character_engine
+        self._initialize_from_characters()
+        logger.info(f"EmotionEngine reloaded: {len(self._mood_state)} characters")

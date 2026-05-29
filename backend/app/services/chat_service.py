@@ -222,54 +222,55 @@ class ChatService:
 
             messages = await ChatService._build_messages(conversation, user_message)
 
-            config_dict = None
-            if model_config:
-                config_dict = {
-                    "provider": model_config.provider,
-                    "model_name": model_config.model_name,
-                    "api_key": model_config.api_key,
-                    "base_url": model_config.base_url,
-                    "group_id": getattr(model_config, 'group_id', None)
-                }
-                logger.info(f"[Chat] model_config: provider={model_config.provider}, model={model_config.model_name}, base_url={model_config.base_url}")
-            else:
-                logger.warning("[Chat] No model_config provided")
+        config_dict = None
+        if model_config:
+            config_dict = {
+                "provider": model_config.provider,
+                "model_name": model_config.model_name,
+                "api_key": model_config.api_key,
+                "base_url": model_config.base_url,
+                "group_id": getattr(model_config, 'group_id', None)
+            }
+            logger.info(f"[Chat] model_config: provider={model_config.provider}, model={model_config.model_name}, base_url={model_config.base_url}")
+        else:
+            logger.warning("[Chat] No model_config provided")
 
-            llm = LLMProvider(config_dict)
+        llm = LLMProvider(config_dict)
 
-            full_response = ""
-            buffer = ""
-            
-            async for chunk in llm.chat_stream(messages):
-                buffer += chunk
-                
-                while buffer:
-                    think_start = buffer.lower().find('<think>')
-                    think_end = buffer.lower().find('</think>')
-                    
-                    if think_start != -1 and think_end != -1:
-                        buffer = buffer[:think_start] + buffer[think_end + 6:]
-                    elif think_start != -1:
-                        to_send = buffer[:think_start]
-                        buffer = buffer[think_start + 9:]
-                        if to_send:
-                            full_response += to_send
-                            yield to_send
-                        break
-                    elif think_end != -1:
-                        buffer = buffer[think_end + 6:]
-                    else:
-                        full_response += buffer
-                        yield buffer
-                        buffer = ""
-                        break
-            
-            if buffer:
-                buffer = buffer.strip()
-                if buffer:
+        full_response = ""
+        buffer = ""
+
+        async for chunk in llm.chat_stream(messages):
+            buffer += chunk
+
+            while buffer:
+                think_start = buffer.lower().find('<think>')
+                think_end = buffer.lower().find('</think>')
+
+                if think_start != -1 and think_end != -1:
+                    buffer = buffer[:think_start] + buffer[think_end + 6:]
+                elif think_start != -1:
+                    to_send = buffer[:think_start]
+                    buffer = buffer[think_start + 9:]
+                    if to_send:
+                        full_response += to_send
+                        yield to_send
+                    break
+                elif think_end != -1:
+                    buffer = buffer[think_end + 6:]
+                else:
                     full_response += buffer
                     yield buffer
+                    buffer = ""
+                    break
 
+        if buffer:
+            buffer = buffer.strip()
+            if buffer:
+                full_response += buffer
+                yield buffer
+
+        async with UnitOfWork() as uow:
             await uow.messages.create({
                 "conversation_id": conversation_id,
                 "role": "assistant",
@@ -285,6 +286,7 @@ class ChatService:
     @staticmethod
     async def _build_messages(conversation, user_message: str) -> List[Dict[str, str]]:
         messages = []
+        system_parts = []
 
         if conversation.character:
             system_prompt = f"你扮演的角色是 {conversation.character.name}。"
@@ -292,7 +294,7 @@ class ChatService:
                 system_prompt += f" 性格特点: {conversation.character.personality}"
             if conversation.character.background:
                 system_prompt += f" 背景: {conversation.character.background}"
-            messages.append({"role": "system", "content": system_prompt})
+            system_parts.append(system_prompt)
 
         if conversation.material:
             material_content = ""
@@ -320,11 +322,14 @@ class ChatService:
             
             if not material_content:
                 raise ValueError(f"教材「{conversation.material.title}」没有内容。请检查教材是否已上传文件，或内容是否为空。")
+
+            if len(material_content) > 4000:
+                material_content = material_content[:4000] + "\n\n... (内容过长已截断，请询问用户是否需要了解更详细的教材信息)"
             
-            messages.append({
-                "role": "system",
-                "content": f"教材信息: {conversation.material.title}\n\n{material_content}"
-            })
+            system_parts.append(f"教材信息: {conversation.material.title}\n\n{material_content}")
+
+        if system_parts:
+            messages.append({"role": "system", "content": "\n\n".join(system_parts)})
 
         async with UnitOfWork() as uow:
             history = await uow.messages.get_by_conversation(conversation.id)

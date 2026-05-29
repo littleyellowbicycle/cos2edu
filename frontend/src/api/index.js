@@ -3,10 +3,7 @@ import { ElMessage } from 'element-plus'
 
 const apiClient = axios.create({
   baseURL: '/api/v1',
-  timeout: 30000,
-  headers: {
-    'Content-Type': 'application/json'
-  }
+  timeout: 30000
 })
 
 apiClient.interceptors.request.use(
@@ -47,9 +44,7 @@ export default {
     create: (data) => apiClient.post('/crud/materials', data),
     update: (id, data) => apiClient.put(`/crud/materials/${id}`, data),
     delete: (id) => apiClient.delete(`/crud/materials/${id}`),
-    upload: (formData) => apiClient.post('/crud/materials/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    }),
+    upload: (formData) => apiClient.post('/crud/materials/upload', formData),
     generateSummary: (id) => apiClient.post(`/crud/materials/${id}/generate-summary`)
   },
   conversations: {
@@ -57,7 +52,10 @@ export default {
     getById: (id) => apiClient.get(`/crud/conversations/${id}`),
     create: (data) => apiClient.post('/crud/conversations', data),
     update: (id, data) => apiClient.put(`/crud/conversations/${id}`, data),
-    delete: (id) => apiClient.delete(`/crud/conversations/${id}`)
+    delete: (id) => apiClient.delete(`/crud/conversations/${id}`),
+    search: (params) => apiClient.get('/content/conversations/search', { params }),
+    searchMessages: (conversationId, params) => apiClient.get(`/content/conversations/${conversationId}/messages/search`, { params }),
+    stats: () => apiClient.get('/content/conversations/stats'),
   },
   modelConfigs: {
     getAll: () => apiClient.get('/crud/model-configs'),
@@ -82,5 +80,16 @@ export default {
   providers: {
     list: () => apiClient.get('/crud/providers'),
     models: (provider, params) => apiClient.get(`/crud/providers/${provider}/models`, { params })
+  },
+  content: {
+    searchConversations: (params) => apiClient.get('/content/conversations/search', { params }),
+    conversationStats: () => apiClient.get('/content/conversations/stats'),
+    searchMessages: (conversationId, params) => apiClient.get(`/content/conversations/${conversationId}/messages/search`, { params }),
+    listYamlFiles: () => apiClient.get('/content/yaml/list'),
+    readYamlFile: (path) => apiClient.get(`/content/yaml/${path}`),
+    writeYamlFile: (path, content) => apiClient.put(`/content/yaml/${path}`, { content }),
+    createCharacterFromTemplate: (data) => apiClient.post('/content/characters/create', data),
+    getCharacterTemplates: () => apiClient.get('/content/characters/templates'),
+    reloadContent: () => apiClient.post('/content/reload'),
   }
 }

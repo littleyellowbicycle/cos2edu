@@ -180,3 +180,11 @@ class EventEngine:
 
     def mark_event_resolved(self, event_id: str) -> None:
         pass
+
+    def reload(self, content_dir: str) -> None:
+        self._content_dir = Path(content_dir)
+        self._events.clear()
+        self._triggered_today.clear()
+        self._last_checked_day = 0
+        self._load_events()
+        logger.info(f"EventEngine reloaded: {len(self._events)} events")

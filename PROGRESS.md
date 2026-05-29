@@ -78,15 +78,28 @@
 
 ---
 
-## Phase 4.0 — 打磨与增强 🔮
+## Phase 4.0 — 打磨与增强 🔧
 
-> 状态：未开始
+> 状态：进行中
 
-- [ ] 对话历史搜索与管理增强
-- [ ] 世界观 YAML 编辑器（前端可视化编辑课程内容）
-- [ ] 角色创建向导（支持自定义头像、人格模板）
-- [ ] 世界观/角色热重载
-- [ ] 国际化 i18n
+- [x] 对话历史搜索与管理增强
+  - 后端: ConversationRepository.search() 支持关键词+角色ID搜索、MessageSearchRepository 全文搜索
+  - 后端: /content/conversations/search, /content/conversations/{id}/messages/search, /content/conversations/stats API
+  - 前端: Conversations.vue 重构 — 搜索栏、角色筛选、分页、统计栏、近7天计数
+  - 前端: api/index.js 新增 conversations.search, conversations.stats, content.* 系列 API
+- [x] 世界观 YAML 编辑器
+  - 后端: /content/yaml/list, /content/yaml/{path} (GET/PUT) — 读取/保存 YAML 内容，自动备份，YAML 语法校验
+  - 前端: YamlEditor.vue — 文件列表+YAML源码编辑器+结构预览 (YamlPreview.vue 递归组件)
+  - 前端: js-yaml 客户端解析预览
+- [x] 角色创建向导
+  - 后端: /content/characters/create — 从模板创建角色 YAML 文件，自动加载到 CharacterEngine
+  - 后端: /content/characters/templates — 4 个内置模板 (苏格拉底式/实践型/学术型/故事型)
+  - 前端: CharacterCreator.vue — 4步向导 (选模板→基本信息→提示&情感→确认)
+- [x] 世界观/角色热重载
+  - 后端: POST /content/reload — 热重载 KnowledgeGraph, CharacterEngine, WorldStateEngine, EmotionEngine, EventEngine
+  - 前端: YamlEditor.vue 中"热重载"按钮
+  - WorldStateEngine.reload(), EmotionEngine.reload(), EventEngine.reload() 方法
+- [⏭] ~~国际化 i18n~~ — 单用户桌面应用、中文目标用户，暂不做
 
 ---
 
@@ -123,3 +136,7 @@
 | RAG MVP | FAISS + 三级嵌入 fallback | sentence-transformers 优先，hash 保底 |
 | Route 修复 | /curriculum/curriculum → /curriculum | 去除重复前缀 |
 | 情感检测 | 关键词匹配 | MVP 够用，后续可加 LLM |
+| 对话搜索 | SQLAlchemy ilike + 子查询 | 标题/内容双维度搜索 |
+| YAML 编辑 | API 读写 + 自动备份 | 保存前 YAML 语法校验，.bak 回滚 |
+| 角色创建 | YAML 模板 + 向导 UI | 4 模板，创建后自动热加载到引擎 |
+| 热重载 | POST /content/reload | 不重启进程重新加载所有 YAML 内容到内存 |

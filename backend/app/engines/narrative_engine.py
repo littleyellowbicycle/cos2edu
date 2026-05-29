@@ -57,12 +57,6 @@ class NarrativeEngine:
                 if not conversation:
                     raise ValueError(f"Conversation {conversation_id} not found")
 
-                await uow.messages.create({
-                    "conversation_id": conversation_id,
-                    "role": "user",
-                    "content": user_message,
-                })
-
                 mastered = await self._get_mastered_points(uow)
                 point_data = self.teaching.get_next_teaching_point(mastered)
 

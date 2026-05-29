@@ -46,6 +46,16 @@ const routes = [
     name: 'Dashboard',
     component: () => import('@/views/Dashboard.vue'),
   },
+  {
+    path: '/editor',
+    name: 'YamlEditor',
+    component: () => import('@/views/YamlEditor.vue'),
+  },
+  {
+    path: '/characters/create',
+    name: 'CharacterCreator',
+    component: () => import('@/views/CharacterCreator.vue'),
+  },
 ]
 
 const router = createRouter({

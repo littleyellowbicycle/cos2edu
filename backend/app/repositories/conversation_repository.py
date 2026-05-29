@@ -1,5 +1,5 @@
-from typing import List, Optional
-from sqlalchemy import select, update, delete, func
+from typing import List, Optional, Tuple
+from sqlalchemy import select, update, delete, func, or_
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 from models.conversation import Conversation
@@ -19,6 +19,46 @@ class ConversationRepository(BaseRepository[Conversation]):
             .limit(limit)
         )
         return list(result.scalars().all())
+
+    async def search(
+        self,
+        keyword: Optional[str] = None,
+        character_id: Optional[int] = None,
+        skip: int = 0,
+        limit: int = 50,
+    ) -> tuple[List[Conversation], int]:
+        stmt = select(Conversation)
+        count_stmt = select(func.count(Conversation.id))
+
+        if keyword:
+            subq = select(Message.conversation_id).where(
+                Message.content.ilike(f"%{keyword}%")
+            ).subquery()
+            stmt = stmt.where(
+                or_(
+                    Conversation.title.ilike(f"%{keyword}%"),
+                    Conversation.id.in_(select(subq.c.conversation_id)),
+                )
+            )
+            count_stmt = count_stmt.where(
+                or_(
+                    Conversation.title.ilike(f"%{keyword}%"),
+                    Conversation.id.in_(select(subq.c.conversation_id)),
+                )
+            )
+
+        if character_id:
+            stmt = stmt.where(Conversation.character_id == character_id)
+            count_stmt = count_stmt.where(Conversation.character_id == character_id)
+
+        total = (await self.session.execute(count_stmt)).scalar() or 0
+
+        result = await self.session.execute(
+            stmt.order_by(Conversation.updated_at.desc())
+            .offset(skip)
+            .limit(limit)
+        )
+        return list(result.scalars().all()), total
 
     async def get_by_id(self, id: int) -> Optional[Conversation]:
         result = await self.session.execute(

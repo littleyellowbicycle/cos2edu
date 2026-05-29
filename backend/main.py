@@ -39,12 +39,13 @@ _state_task = None
 
 def _get_content_dir() -> str:
     if getattr(sys, 'frozen', False):
-        base = os.path.dirname(sys.executable)
+        base_dir = os.path.dirname(sys.executable)
     else:
-        base = os.path.dirname(os.path.abspath(__file__))
-    content_dir = os.path.join(base, "content")
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+
+    content_dir = os.path.join(base_dir, "content")
     if not os.path.exists(content_dir):
-        content_dir = os.path.join(base, "backend", "content")
+        content_dir = os.path.join(base_dir, "backend", "content")
     return content_dir
 
 

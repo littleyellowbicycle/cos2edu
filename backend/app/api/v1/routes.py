@@ -244,57 +244,66 @@ class UploadMaterialResponse(BaseModel):
 @router.post("/materials/upload", response_model=UploadMaterialResponse)
 @limiter.limit("10/minute")
 async def upload_material(request: Request, file: UploadFile = File(...)):
-    if not file.filename:
-        raise HTTPException(status_code=400, detail="请选择文件")
-    
-    file_ext = os.path.splitext(file.filename)[1].lower()
-    allowed_exts = ['.txt', '.md', '.markdown', '.text', '.pdf']
-    
-    if file_ext not in allowed_exts:
-        raise HTTPException(status_code=400, detail=f"不支持的文件格式，仅支持: {', '.join(allowed_exts)}")
-    
-    unique_filename = f"{uuid.uuid4().hex}{file_ext}"
-    file_path = os.path.join(settings.MATERIALS_DIR, unique_filename)
-    os.makedirs(settings.MATERIALS_DIR, exist_ok=True)
-    
-    content = await file.read()
-    
-    if file_ext == '.pdf':
-        try:
-            import pdfplumber
-        except ImportError:
-            raise HTTPException(
-                status_code=500,
-                detail="PDF解析库未安装，请联系管理员安装 pdfplumber"
-            )
-        text_parts = []
-        with pdfplumber.open(io.BytesIO(content)) as pdf:
-            for page in pdf.pages:
-                page_text = page.extract_text()
-                if page_text:
-                    text_parts.append(page_text)
-        text = '\n'.join(text_parts)
-        if not text.strip():
-            raise HTTPException(
-                status_code=400,
-                detail="PDF文件无法提取文字内容，可能是扫描版或图片型PDF，请尝试转换为文本格式后上传"
-            )
-    else:
-        try:
-            text = content.decode('utf-8')
-        except UnicodeDecodeError:
+    try:
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="请选择文件")
+
+        file_ext = os.path.splitext(file.filename)[1].lower()
+        allowed_exts = ['.txt', '.md', '.markdown', '.text', '.pdf']
+
+        if file_ext not in allowed_exts:
+            raise HTTPException(status_code=400, detail=f"不支持的文件格式，仅支持: {', '.join(allowed_exts)}")
+
+        unique_filename = f"{uuid.uuid4().hex}{file_ext}"
+        file_path = os.path.join(settings.MATERIALS_DIR, unique_filename)
+        os.makedirs(settings.MATERIALS_DIR, exist_ok=True)
+
+        content = await file.read()
+        file_size_mb = len(content) / (1024 * 1024)
+
+        if file_ext == '.pdf':
             try:
-                text = content.decode('gbk')
-            except:
-                text = content.decode('utf-8', errors='ignore')
-    
-    async with aiofiles.open(file_path, 'w', encoding='utf-8') as f:
-        await f.write(text)
-    
-    return UploadMaterialResponse(
-        content_url=unique_filename,
-        filename=file.filename
-    )
+                import pdfplumber
+            except ImportError:
+                raise HTTPException(
+                    status_code=500,
+                    detail="PDF解析库未安装，请联系管理员安装 pdfplumber"
+                )
+            text_parts = []
+            with pdfplumber.open(io.BytesIO(content)) as pdf:
+                for page in pdf.pages:
+                    page_text = page.extract_text()
+                    if page_text:
+                        text_parts.append(page_text)
+            text = '\n'.join(text_parts)
+            if not text.strip():
+                raise HTTPException(
+                    status_code=400,
+                    detail="PDF文件无法提取文字内容，可能是扫描版或图片型PDF，请尝试转换为文本格式后上传"
+                )
+        else:
+            try:
+                text = content.decode('utf-8')
+            except UnicodeDecodeError:
+                try:
+                    text = content.decode('gbk')
+                except:
+                    text = content.decode('utf-8', errors='ignore')
+
+        async with aiofiles.open(file_path, 'w', encoding='utf-8') as f:
+            await f.write(text)
+
+        logger.info(f"Uploaded material: filename={file.filename}, size={file_size_mb:.1f}MB, saved_as={unique_filename}")
+
+        return UploadMaterialResponse(
+            content_url=unique_filename,
+            filename=file.filename
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Upload material failed: {type(e).__name__}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"文件上传失败: {str(e)}")
 
 
 @router.post("/materials/{material_id}/generate-summary")

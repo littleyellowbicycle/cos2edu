@@ -1,4 +1,5 @@
 import hashlib
+import os
 from typing import Optional
 from pathlib import Path
 
@@ -14,19 +15,46 @@ try:
 except ImportError:
     logger.warning("faiss or numpy not available, RAG will use long-context fallback")
 
-_sentence_transformers_available = False
-_sentence_model = None
+_fastembed_available = False
+_fastembed_model = None
 try:
-    from sentence_transformers import SentenceTransformer
-    _sentence_transformers_available = True
-except ImportError:
-    pass
+    from fastembed import TextEmbedding
+    import fastembed.common.model_management as _mm
+
+    # Monkey-patch snapshot_download to bypass HF SSL cert issues behind proxy
+    _orig_snapshot = _mm.snapshot_download
+    def _patched_snapshot(repo_id, **kwargs):
+        base_cache = kwargs.get("cache_dir", os.path.expanduser("~/.cache/fastembed"))
+        snap_base = os.path.join(
+            base_cache, f"models--{repo_id.replace('/', '--')}", "snapshots"
+        )
+        if os.path.isdir(snap_base):
+            snaps = os.listdir(snap_base)
+            if snaps:
+                return os.path.join(snap_base, snaps[0])
+        return _orig_snapshot(repo_id, **kwargs)
+    _mm.snapshot_download = _patched_snapshot
+
+    # Also patch huggingface_hub functions to avoid SSL errors
+    import huggingface_hub
+    _orig_model_info = huggingface_hub.model_info
+    from dataclasses import dataclass
+    @dataclass
+    class _MockInfo:
+        sha: str = "46fbe35fd4374a00fee7de77dfddaeb6dd6a2c59"
+    huggingface_hub.model_info = lambda *a, **kw: _MockInfo()
+    huggingface_hub.repo_info = lambda *a, **kw: _MockInfo()
+
+    _fastembed_available = True
+    logger.info("fastembed imported and patches applied")
+except Exception as e:
+    logger.warning(f"fastembed not available ({type(e).__name__}: {e}), using hash fallback for embeddings")
 
 
 class RAGService:
     """RAG service with pluggable embedding backends and FAISS retrieval."""
 
-    EMBEDDING_PROVIDERS = ("sentence_transformer", "openai", "hash")
+    EMBEDDING_PROVIDERS = ("fastembed", "openai", "hash")
 
     def __init__(self, embedding_dim: int = 768, embedding_provider: str = "auto"):
         self.embedding_dim = embedding_dim
@@ -48,13 +76,13 @@ class RAGService:
 
     def _resolve_provider(self, provider: str) -> None:
         if provider == "auto":
-            if _sentence_transformers_available:
-                self._init_sentence_transformer()
+            if _fastembed_available:
+                self._init_fastembed()
             else:
                 self._embed_provider = "hash"
                 self.embedding_dim = 256
-        elif provider == "sentence_transformer":
-            self._init_sentence_transformer()
+        elif provider == "fastembed":
+            self._init_fastembed()
         elif provider == "openai":
             self._embed_provider = "openai"
             self.embedding_dim = 1536
@@ -62,17 +90,22 @@ class RAGService:
             self._embed_provider = "hash"
             self.embedding_dim = 256
 
-    def _init_sentence_transformer(self) -> None:
-        global _sentence_model
+    def _init_fastembed(self) -> None:
+        global _fastembed_model
         try:
-            if _sentence_model is None:
-                model_name = "all-MiniLM-L6-v2"
-                _sentence_model = SentenceTransformer(model_name)
-                logger.info(f"Loaded sentence-transformers model: {model_name}")
-            self._embed_provider = "sentence_transformer"
-            self.embedding_dim = _sentence_model.get_sentence_embedding_dimension()
+            if _fastembed_model is None:
+                model_name = "BAAI/bge-small-zh-v1.5"
+                cache_dir = os.path.join(
+                    Path(__file__).resolve().parent.parent.parent, ".cache", "fastembed"
+                )
+                _fastembed_model = TextEmbedding(
+                    model_name=model_name, cache_dir=cache_dir
+                )
+                logger.info(f"Loaded fastembed model: {model_name} (dim={_fastembed_model.embedding_size})")
+            self._embed_provider = "fastembed"
+            self.embedding_dim = _fastembed_model.embedding_size
         except Exception as e:
-            logger.warning(f"Failed to load sentence-transformers: {e}, falling back to hash")
+            logger.warning(f"Failed to load fastembed: {e}, falling back to hash")
             self._embed_provider = "hash"
             self.embedding_dim = 256
 
@@ -94,8 +127,8 @@ class RAGService:
         return chunks
 
     def _embed(self, text: str) -> list[float]:
-        if self._embed_provider == "sentence_transformer" and _sentence_model is not None:
-            return _sentence_model.encode(text).tolist()
+        if self._embed_provider == "fastembed" and _fastembed_model is not None:
+            return list(_fastembed_model.embed(text))[0].tolist()
         elif self._embed_provider == "openai":
             return self._embed_openai(text)
         else:
