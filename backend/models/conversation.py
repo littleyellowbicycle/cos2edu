@@ -9,6 +9,7 @@ class Conversation(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(200), nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     character_id = Column(Integer, ForeignKey("characters.id"))
     material_id = Column(Integer, ForeignKey("materials.id"), nullable=True)
     teaching_mode = Column(String(50), default="socratic")
@@ -24,6 +25,7 @@ class Conversation(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
+    user = relationship("User", back_populates="conversations")
     character = relationship("Character", back_populates="conversations")
     material = relationship("Material", back_populates="conversations")
     messages = relationship("Message", back_populates="conversation", order_by="Message.created_at")

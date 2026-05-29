@@ -11,6 +11,7 @@ from .learning_progress import LearningProgress
 from .syllabus import Syllabus
 from .knowledge_point import KnowledgePoint
 from .event_log import EventLog
+from .user import User
 
 __all__ = [
     "Base",
@@ -26,4 +27,5 @@ __all__ = [
     "Syllabus",
     "KnowledgePoint",
     "EventLog",
+    "User",
 ]

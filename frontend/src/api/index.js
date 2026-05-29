@@ -11,6 +11,10 @@ const apiClient = axios.create({
 
 apiClient.interceptors.request.use(
   (config) => {
+    const token = localStorage.getItem('cos2edu_token')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
     return config
   },
   (error) => {
@@ -23,8 +27,17 @@ apiClient.interceptors.response.use(
     return response.data
   },
   (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('cos2edu_token')
+      localStorage.removeItem('cos2edu_user')
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login'
+      }
+    }
     const message = error.response?.data?.detail || error.message || '请求失败'
-    ElMessage.error(message)
+    if (error.response?.status !== 401) {
+      ElMessage.error(message)
+    }
     return Promise.reject(error)
   }
 )

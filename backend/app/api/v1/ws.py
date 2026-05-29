@@ -2,6 +2,7 @@ import json
 from typing import Optional
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 
+from app.core.auth import decode_token
 from app.core.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -24,10 +25,17 @@ def get_narrative_engine():
 async def websocket_endpoint(
     websocket: WebSocket,
     model_config_id: Optional[int] = Query(None),
+    token: Optional[str] = Query(None),
 ):
+    user_id = None
+    if token:
+        payload = decode_token(token)
+        if payload:
+            user_id = int(payload.get("sub", 0))
+
     await websocket.accept()
     client_id = id(websocket)
-    logger.info(f"WebSocket connected: {client_id}")
+    logger.info(f"WebSocket connected: {client_id}, user_id={user_id}")
 
     try:
         while True:

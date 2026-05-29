@@ -67,11 +67,20 @@
 
 ## Phase 3.0 — 多学生协作 📋
 
-> 状态：未开始
+> 状态：进行中
 
-- [ ] 多用户系统（认证 / 授权）
-- [ ] 学生学习分析仪表盘
-- [ ] 教师 dashboard
+- [x] 用户模型：User (id, username, email, hashed_password, display_name, role, avatar, is_active)
+- [x] JWT 认证：bcrypt 密码哈希 + python-jose JWT token
+- [x] Auth API：register, login, me (GET/PUT), change-password, admin user list
+- [x] Auth middleware：get_current_user, require_role("admin"/"teacher")
+- [x] 现有模型关联：Conversation.user_id, LearningProgress.user_id
+- [x] 前端 Auth store：useUserStore (login/register/logout/profile)
+- [x] 前端 API interceptor：Authorization Bearer token 注入 + 401 自动跳转登录
+- [x] 前端 Login.vue：登录/注册页面（JWT 认证）
+- [x] 前端路由守卫：beforeEach 拦截未登录用户重定向 /login
+- [x] WS 认证：token query param 传参，后端 decode_token 解析 user_id
+- [ ] Student dashboard：学习分析仪表盘
+- [ ] Teacher dashboard：班级概览、学生进度
 - [ ] 对话历史搜索与管理增强
 
 ---

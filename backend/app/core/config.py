@@ -101,7 +101,9 @@ class BaseConfig(BaseSettings):
     CORS_ALLOW_HEADERS: List[str] = ["*"]
     
     DATABASE_URL: str = ""
-    
+    SECRET_KEY: str = "cos2edu-dev-secret-change-in-production"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7
+
     LOG_LEVEL: str = "INFO"
     DEBUG: bool = False
     
