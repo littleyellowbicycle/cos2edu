@@ -411,6 +411,9 @@ onMounted(async () => {
   wsUnsubFns.push(ws.on('assessment.result', (msg) => {
     narrativeStore.setAssessmentResult(msg.payload)
   }))
+  wsUnsubFns.push(ws.on('time.advanced', (msg) => {
+    narrativeStore.applyTimeAdvance(msg.payload)
+  }))
 
   narrativeStore.setConnectionState(ws.connectionState.value)
 })

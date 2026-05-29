@@ -167,6 +167,13 @@ class NarrativeWebSocket {
     })
   }
 
+  advanceTime(days = 1) {
+    this.send({
+      type: 'time.advance',
+      payload: { days },
+    })
+  }
+
   ping() {
     this.send({ type: 'ping' })
   }
@@ -195,6 +202,7 @@ export function useWebSocket() {
     rejectSyllabus: wsInstance.rejectSyllabus.bind(wsInstance),
     generateAssessment: wsInstance.generateAssessment.bind(wsInstance),
     submitAssessment: wsInstance.submitAssessment.bind(wsInstance),
+    advanceTime: wsInstance.advanceTime.bind(wsInstance),
     on: wsInstance.on.bind(wsInstance),
     off: wsInstance.off.bind(wsInstance),
     ping: wsInstance.ping.bind(wsInstance),

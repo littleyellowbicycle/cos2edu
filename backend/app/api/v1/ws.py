@@ -58,6 +58,20 @@ async def websocket_endpoint(
                         "payload": {},
                     }))
 
+            elif msg_type == "time.advance":
+                days = payload.get("days", 1)
+                engine = get_narrative_engine()
+                if engine:
+                    result = engine.world.advance_time(days)
+                    await engine.state_manager.update("time_advance", {
+                        "current_day": result["current_day"],
+                        "narrative_phase": result["narrative_phase"],
+                    })
+                    await websocket.send_text(json.dumps({
+                        "type": "time.advanced",
+                        "payload": result,
+                    }, ensure_ascii=False))
+
             elif msg_type == "chat.send":
                 content = payload.get("content", "")
                 conversation_id = payload.get("conversation_id")

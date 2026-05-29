@@ -57,10 +57,10 @@
 - [x] WS event: assessment.start / assessment.quiz / assessment.result
 - [x] 前端 Chat.vue：考核面板 UI (选择题+简答题)、考核结果展示、掌握度进度条
 - [x] Narrative store：currentAssessment / assessmentResult 状态管理
-- [x] useWebSocket.js：generateAssessment / submitAssessment 方法
+- [x] useWebSocket.js：generateAssessment / submitAssessment / advanceTime 方法
 - [x] REST API：POST /assessment/generate、GET /progress/{point_id}
-- [ ] 前端场景切换 UI（场景卡片、时间线可视化）
-- [ ] 前端课程编辑器（查看/确认大纲、编辑知识点）
+- [x] 前端场景切换 UI：Timeline.vue 重构，场景卡片点击切换，时间推进按钮，WS time.advance
+- [x] 前端课程编辑器：Curriculum.vue 重构，知识点进度+掌握度、阶段折叠、一键测验按钮、同步按钮
 - [ ] RAG 嵌入升级：哈希伪嵌入 → 真实嵌入（sentence-transformers / OpenAI embeddings）
 
 ---

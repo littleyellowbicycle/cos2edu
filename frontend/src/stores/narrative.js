@@ -141,6 +141,19 @@ export const useNarrativeStore = defineStore('narrative', () => {
     connectionState.value = state
   }
 
+  function applyTimeAdvance(payload) {
+    world.currentDay = payload.current_day || world.currentDay + 1
+    world.progressPercent = payload.progress_percent || Math.round(world.currentDay / world.totalDays * 100)
+    if (payload.narrative_phase) {
+      world.narrativePhase = payload.narrative_phase
+    }
+    if (payload.scene_info) {
+      world.sceneName = payload.scene_info.name
+      world.sceneDescription = payload.scene_info.description
+      world.currentScene = payload.current_scene || world.currentScene
+    }
+  }
+
   function reset() {
     world.currentDay = 1
     world.currentScene = 'classroom'
@@ -171,6 +184,7 @@ export const useNarrativeStore = defineStore('narrative', () => {
     setAssessment,
     setAssessmentResult,
     clearAssessment,
+    applyTimeAdvance,
     setConnectionState,
     reset,
   }
