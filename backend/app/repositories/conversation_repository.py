@@ -20,6 +20,16 @@ class ConversationRepository(BaseRepository[Conversation]):
         )
         return list(result.scalars().all())
 
+    async def get_by_user(self, user_id: int, skip: int = 0, limit: int = 100) -> List[Conversation]:
+        result = await self.session.execute(
+            select(Conversation)
+            .filter(Conversation.user_id == user_id)
+            .order_by(Conversation.updated_at.desc())
+            .offset(skip)
+            .limit(limit)
+        )
+        return list(result.scalars().all())
+
     async def get_by_id(self, id: int) -> Optional[Conversation]:
         result = await self.session.execute(
             select(Conversation)

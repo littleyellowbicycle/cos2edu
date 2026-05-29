@@ -11,7 +11,9 @@
         </p>
         <div class="hero-actions">
           <router-link to="/characters" class="btn btn-primary">开始探索</router-link>
-          <router-link to="/conversations" class="btn btn-secondary">继续对话</router-link>
+          <router-link to="/dashboard" class="btn btn-secondary">学习中心</router-link>
+          <router-link v-if="!isLoggedIn" to="/login" class="btn btn-secondary">登录</router-link>
+          <button v-if="isLoggedIn" class="btn btn-ghost" @click="handleLogout">退出</button>
         </div>
       </div>
       <div class="hero-decoration">
@@ -47,6 +49,12 @@
           <p>配置 AI 模型和 API Key，确保对话功能正常运行</p>
           <span class="feature-arrow">→</span>
         </div>
+        <div class="feature-card" @click="$router.push('/dashboard')">
+          <div class="feature-icon">📊</div>
+          <h3>学习中心</h3>
+          <p>查看学习进度、掌握度分析和薄弱环节</p>
+          <span class="feature-arrow">→</span>
+        </div>
       </div>
     </section>
 
@@ -57,6 +65,18 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
+import { useRouter } from 'vue-router'
+import { useUserStore } from '@/stores/user'
+
+const router = useRouter()
+const userStore = useUserStore()
+const isLoggedIn = computed(() => userStore.isLoggedIn)
+
+function handleLogout() {
+  userStore.logout()
+  router.push('/login')
+}
 </script>
 
 <style scoped>

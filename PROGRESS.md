@@ -81,6 +81,9 @@
 - [x] WS 认证：token query param 传参，后端 decode_token 解析 user_id
 - [ ] Student dashboard：学习分析仪表盘
 - [ ] Teacher dashboard：班级概览、学生进度
+- [x] Conversation list scoped to user_id (ConversationRepository.get_by_user)
+- [x] Student dashboard API + Vue view (progress summary, point details, mastery)
+- [x] Teacher dashboard API + Vue view (student progress overview)
 - [ ] 对话历史搜索与管理增强
 
 ---

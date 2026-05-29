@@ -13,6 +13,17 @@ const routes = [
     component: () => import('@/views/Home.vue'),
   },
   {
+    path: '/dashboard',
+    name: 'Dashboard',
+    component: () => import('@/views/Dashboard.vue'),
+  },
+  {
+    path: '/teacher',
+    name: 'TeacherDashboard',
+    component: () => import('@/views/TeacherDashboard.vue'),
+    meta: { requiresRole: 'teacher' },
+  },
+  {
     path: '/characters',
     name: 'Characters',
     component: () => import('@/views/Characters.vue'),
