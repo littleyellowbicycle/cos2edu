@@ -37,6 +37,11 @@ class SyllabusEditRequest(BaseModel):
     content: Optional[dict] = None
 
 
+class AssessmentGenerateRequest(BaseModel):
+    point_id: str
+    character_id: str = ""
+
+
 @router.get("/materials/{material_id}/status", response_model=MaterialStatusResponse)
 @limiter.limit("60/minute")
 async def get_material_status(request: Request, material_id: int):
@@ -200,3 +205,45 @@ async def get_curriculum_modules(request: Request):
             })
 
     return modules
+
+
+@router.post("/assessment/generate")
+@limiter.limit("10/minute")
+async def generate_assessment(request: Request, body: AssessmentGenerateRequest):
+    """Generate a quiz for a given knowledge point using LLM"""
+    from app.api.v1.ws import get_narrative_engine
+    engine = get_narrative_engine()
+    if not engine or not engine.assessment:
+        raise HTTPException(status_code=503, detail="AssessmentEngine not initialized")
+
+    result = await engine.generate_quiz(
+        point_id=body.point_id,
+        character_id=body.character_id,
+    )
+    if "error" in result:
+        raise HTTPException(status_code=500, detail=result["error"])
+    return result
+
+
+@router.get("/progress/{point_id}")
+@limiter.limit("30/minute")
+async def get_point_progress(request: Request, point_id: str):
+    """Get learning progress for a specific knowledge point"""
+    async with UnitOfWork() as uow:
+        from models.learning_progress import LearningProgress
+        from sqlalchemy import select
+        result = await uow.session.execute(
+            select(LearningProgress).where(
+                LearningProgress.knowledge_point_id == point_id
+            )
+        )
+        progress = result.scalar_one_or_none()
+        if progress:
+            return {
+                "point_id": progress.knowledge_point_id,
+                "mastery_level": progress.mastery_level,
+                "status": progress.status,
+                "attempts": progress.attempts,
+                "last_reviewed_at": str(progress.last_reviewed_at) if progress.last_reviewed_at else None,
+            }
+        return {"point_id": point_id, "mastery_level": 0, "status": "locked", "attempts": 0}

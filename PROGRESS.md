@@ -47,16 +47,21 @@
 
 ---
 
-## Phase 2.0 — 考核与场景 🔄
+## Phase 2.0 — 考核与场景 🔧
 
-> 状态：未开始
+> 状态：进行中
 
-- [ ] AssessmentEngine：quiz 生成、得分计算、掌握度判定
-- [ ] NarrativeEngine 调用 AssessmentEngine 进行知识点考核
+- [x] AssessmentEngine：quiz 生成 (LLM prompt)、答案评分、掌握度计算、状态判定
+- [x] NarrativeEngine 集成 AssessmentEngine：自动触发考核 (should_trigger_assessment)、考核答案处理、掌握度持久化
+- [x] WS 新增 assessment.generate / assessment.answer 消息类型
+- [x] WS event: assessment.start / assessment.quiz / assessment.result
+- [x] 前端 Chat.vue：考核面板 UI (选择题+简答题)、考核结果展示、掌握度进度条
+- [x] Narrative store：currentAssessment / assessmentResult 状态管理
+- [x] useWebSocket.js：generateAssessment / submitAssessment 方法
+- [x] REST API：POST /assessment/generate、GET /progress/{point_id}
 - [ ] 前端场景切换 UI（场景卡片、时间线可视化）
 - [ ] 前端课程编辑器（查看/确认大纲、编辑知识点）
 - [ ] RAG 嵌入升级：哈希伪嵌入 → 真实嵌入（sentence-transformers / OpenAI embeddings）
-- [ ] 前端 Chat.vue 展示考核结果 + 进度条
 
 ---
 

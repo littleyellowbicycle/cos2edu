@@ -16,6 +16,7 @@ class StateManager:
         "scene_change",
         "narrative_choice",
         "review_status_change",
+        "assessment_result",
     }
     BATCH_SIZE = 10
     FLUSH_INTERVAL = 60
@@ -42,6 +43,8 @@ class StateManager:
                     await self._update_global_flag(uow, data)
                 elif event_type == "review_status_change":
                     await self._update_review_status(uow, data)
+                elif event_type == "assessment_result":
+                    await self._update_mastery(uow, data)
         except Exception as e:
             logger.error(f"Critical persist failed for {event_type}: {e}")
 
@@ -72,20 +75,32 @@ class StateManager:
         point_id = data.get("point_id")
         mastery = data.get("mastery", 0.0)
         status = data.get("status", "learning")
+        attempts = data.get("attempts")
+        weak_areas = data.get("weak_areas")
         progress = await uow.learning_progress.get_by_field("knowledge_point_id", point_id)
         if progress:
-            await uow.learning_progress.update(progress, {
+            update_data = {
                 "mastery_level": mastery,
                 "status": status,
                 "last_reviewed_at": datetime.now(),
-            })
+            }
+            if attempts is not None:
+                update_data["attempts"] = attempts
+            if weak_areas is not None:
+                update_data["weak_areas"] = weak_areas
+            await uow.learning_progress.update(progress, update_data)
         else:
-            await uow.learning_progress.create({
+            create_data = {
                 "knowledge_point_id": point_id,
                 "mastery_level": mastery,
                 "status": status,
                 "last_reviewed_at": datetime.now(),
-            })
+            }
+            if attempts is not None:
+                create_data["attempts"] = attempts
+            if weak_areas is not None:
+                create_data["weak_areas"] = weak_areas
+            await uow.learning_progress.create(create_data)
 
     async def _update_scene(self, uow, data: dict) -> None:
         from models.world_state import WorldState

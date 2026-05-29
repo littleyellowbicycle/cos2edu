@@ -133,6 +133,54 @@ async def websocket_endpoint(
                         "payload": {"event_id": event_id, "chosen_option": option_id},
                     }, ensure_ascii=False))
 
+            elif msg_type == "assessment.generate":
+                point_id = payload.get("point_id", "")
+                character_id = payload.get("character_id", "")
+                engine = get_narrative_engine()
+                if engine and engine.assessment:
+                    result = await engine.generate_quiz(
+                        point_id=point_id,
+                        character_id=character_id,
+                    )
+                    if "error" in result:
+                        await websocket.send_text(json.dumps({
+                            "type": "error",
+                            "content": result["error"],
+                        }))
+                    else:
+                        await websocket.send_text(json.dumps({
+                            "type": "assessment.quiz",
+                            "payload": result,
+                        }, ensure_ascii=False))
+                else:
+                    await websocket.send_text(json.dumps({
+                        "type": "error",
+                        "content": "AssessmentEngine not initialized",
+                    }))
+
+            elif msg_type == "assessment.answer":
+                point_id = payload.get("point_id", "")
+                character_id = payload.get("character_id", "")
+                answers = payload.get("answers", [])
+                conversation_id = payload.get("conversation_id", 0)
+                engine = get_narrative_engine()
+                if engine and engine.assessment:
+                    result = await engine.handle_assessment_answer(
+                        conversation_id=conversation_id,
+                        point_id=point_id,
+                        answers=answers,
+                        character_id=character_id,
+                    )
+                    await websocket.send_text(json.dumps({
+                        "type": "assessment.result",
+                        "payload": result,
+                    }, ensure_ascii=False))
+                else:
+                    await websocket.send_text(json.dumps({
+                        "type": "error",
+                        "content": "AssessmentEngine not initialized",
+                    }))
+
             elif msg_type == "syllabus.confirm":
                 material_id = payload.get("material_id")
                 if material_id:

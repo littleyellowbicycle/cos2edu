@@ -32,6 +32,10 @@ export const useNarrativeStore = defineStore('narrative', () => {
 
   const narrativeChoices = ref(null)
 
+  const currentAssessment = ref(null)
+
+  const assessmentResult = ref(null)
+
   const connectionState = ref('disconnected')
 
   const lastSyncAt = ref(null)
@@ -110,6 +114,29 @@ export const useNarrativeStore = defineStore('narrative', () => {
     world.allowedActions = payload.allowed_actions
   }
 
+  function setAssessment(quizData) {
+    currentAssessment.value = quizData
+    assessmentResult.value = null
+  }
+
+  function setAssessmentResult(result) {
+    assessmentResult.value = result
+    if (result.passed && progress.currentPoint === result.point_id) {
+      progress.completedPoints += 1
+      progress.masteredPoints.push(result.point_id)
+      progress.status = 'mastered'
+      progress.mastery = result.mastery_level
+    } else {
+      progress.mastery = result.mastery_level
+      progress.status = result.status
+    }
+  }
+
+  function clearAssessment() {
+    currentAssessment.value = null
+    assessmentResult.value = null
+  }
+
   function setConnectionState(state) {
     connectionState.value = state
   }
@@ -132,6 +159,8 @@ export const useNarrativeStore = defineStore('narrative', () => {
     progress,
     activeEvents,
     narrativeChoices,
+    currentAssessment,
+    assessmentResult,
     connectionState,
     lastSyncAt,
     overwriteState,
@@ -139,6 +168,9 @@ export const useNarrativeStore = defineStore('narrative', () => {
     updateProgress,
     advanceTime,
     updateSceneChange,
+    setAssessment,
+    setAssessmentResult,
+    clearAssessment,
     setConnectionState,
     reset,
   }

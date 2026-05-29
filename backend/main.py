@@ -25,6 +25,7 @@ from app.engines.teaching_engine import TeachingEngine
 from app.engines.narrative_engine import NarrativeEngine
 from app.engines.emotion_engine import EmotionEngine
 from app.engines.event_engine import EventEngine
+from app.engines.assessment_engine import AssessmentEngine
 from app.state.state_manager import StateManager
 
 logger = get_logger(__name__)
@@ -65,6 +66,8 @@ def _init_engines():
     context_budget = ContextBudget()
     teaching_engine = TeachingEngine(kg, char_engine, context_budget)
 
+    assessment_engine = AssessmentEngine(kg, char_engine)
+
     _state_manager = StateManager()
 
     _narrative_engine = NarrativeEngine(
@@ -75,6 +78,7 @@ def _init_engines():
         state_manager=_state_manager,
         emotion_engine=_emotion_engine,
         event_engine=_event_engine,
+        assessment_engine=assessment_engine,
     )
 
     set_narrative_engine(_narrative_engine)

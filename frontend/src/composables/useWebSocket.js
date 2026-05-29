@@ -148,6 +148,25 @@ class NarrativeWebSocket {
     })
   }
 
+  generateAssessment(pointId, characterId) {
+    this.send({
+      type: 'assessment.generate',
+      payload: { point_id: pointId, character_id: characterId },
+    })
+  }
+
+  submitAssessment(pointId, characterId, answers, conversationId) {
+    this.send({
+      type: 'assessment.answer',
+      payload: {
+        point_id: pointId,
+        character_id: characterId,
+        answers: answers,
+        conversation_id: conversationId,
+      },
+    })
+  }
+
   ping() {
     this.send({ type: 'ping' })
   }
@@ -174,6 +193,8 @@ export function useWebSocket() {
     requestStateSync: wsInstance.requestStateSync.bind(wsInstance),
     confirmSyllabus: wsInstance.confirmSyllabus.bind(wsInstance),
     rejectSyllabus: wsInstance.rejectSyllabus.bind(wsInstance),
+    generateAssessment: wsInstance.generateAssessment.bind(wsInstance),
+    submitAssessment: wsInstance.submitAssessment.bind(wsInstance),
     on: wsInstance.on.bind(wsInstance),
     off: wsInstance.off.bind(wsInstance),
     ping: wsInstance.ping.bind(wsInstance),
