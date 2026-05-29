@@ -61,7 +61,7 @@
 - [x] REST API：POST /assessment/generate、GET /progress/{point_id}
 - [x] 前端场景切换 UI：Timeline.vue 重构，场景卡片点击切换，时间推进按钮，WS time.advance
 - [x] 前端课程编辑器：Curriculum.vue 重构，知识点进度+掌握度、阶段折叠、一键测验按钮、同步按钮
-- [ ] RAG 嵌入升级：哈希伪嵌入 → 真实嵌入（sentence-transformers / OpenAI embeddings）
+- [x] RAG 嵌入升级：支持 sentence-transformers / OpenAI / hash 三级 fallback
 
 ---
 
