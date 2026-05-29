@@ -147,7 +147,7 @@ async def edit_syllabus(request: Request, material_id: int, data: SyllabusEditRe
     return {"status": "ok", "message": "大纲已更新，请重新确认"}
 
 
-@router.get("/curriculum/syllabus")
+@router.get("/syllabus")
 @limiter.limit("60/minute")
 async def get_curriculum_syllabus(request: Request):
     from app.graph.knowledge_graph import KnowledgeGraph
@@ -173,7 +173,7 @@ async def get_curriculum_syllabus(request: Request):
         raise HTTPException(status_code=500, detail=f"加载课程大纲失败: {str(e)}")
 
 
-@router.get("/curriculum/modules")
+@router.get("/modules")
 @limiter.limit("60/minute")
 async def get_curriculum_modules(request: Request):
     from app.graph.knowledge_graph import KnowledgeGraph

@@ -49,7 +49,7 @@
 
 ## Phase 2.0 — 考核与场景 🔧
 
-> 状态：进行中
+> 状态：已完成
 
 - [x] AssessmentEngine：quiz 生成 (LLM prompt)、答案评分、掌握度计算、状态判定
 - [x] NarrativeEngine 集成 AssessmentEngine：自动触发考核 (should_trigger_assessment)、考核答案处理、掌握度持久化
@@ -91,8 +91,8 @@
 
 | 优先级 | 问题 | 状态 |
 |--------|------|------|
-| 🔴 高 | vite build 报错 @vitejs/plugin-vue resolve | 未修复 |
-| 🟡 中 | RAG 使用哈希伪嵌入，检索精度有限 | Phase 2.0 升级 |
+| 🔴 高 | vite build 报错 @vitejs/plugin-vue resolve | ✅ 已修复（node_modules 重装） |
+| 🟡 中 | RAG 使用哈希伪嵌入，检索精度有限 | ✅ Phase 2.0 升级为三级 fallback |
 | 🟢 低 | EmotionEngine mood 判断基于关键词，未使用 LLM | 后续优化 |
 
 ---
@@ -107,5 +107,6 @@
 | WebSocket 实现 | FastAPI 内置 | 无额外依赖 |
 | 状态持久化 | Critical 即时 + Soft 60s 批量 | 平衡性能与可靠性 |
 | 大纲确认 | pending_review + 人工确认 | 质量保障 |
-| RAG MVP | FAISS + 哈希伪嵌入 | 快速可用，Phase 2 升级 |
+| RAG MVP | FAISS + 三级嵌入 fallback | sentence-transformers 优先，hash 保底 |
+| Route 修复 | /curriculum/curriculum → /curriculum | 去除重复前缀 |
 | 情感检测 | 关键词匹配 | MVP 够用，后续可加 LLM |
