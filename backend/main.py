@@ -23,12 +23,16 @@ from app.engines.character_engine import CharacterEngine
 from app.llm.context_budget import ContextBudget
 from app.engines.teaching_engine import TeachingEngine
 from app.engines.narrative_engine import NarrativeEngine
+from app.engines.emotion_engine import EmotionEngine
+from app.engines.event_engine import EventEngine
 from app.state.state_manager import StateManager
 
 logger = get_logger(__name__)
 
 _narrative_engine = None
 _state_manager = None
+_emotion_engine = None
+_event_engine = None
 _state_task = None
 
 
@@ -44,7 +48,7 @@ def _get_content_dir() -> str:
 
 
 def _init_engines():
-    global _narrative_engine, _state_manager
+    global _narrative_engine, _state_manager, _emotion_engine, _event_engine
 
     content_dir = _get_content_dir()
     logger.info(f"Loading content from: {content_dir}")
@@ -55,6 +59,8 @@ def _init_engines():
     world_engine = WorldStateEngine(content_dir)
     char_engine = CharacterEngine(content_dir)
     char_engine.load_characters()
+    _emotion_engine = EmotionEngine(char_engine)
+    _event_engine = EventEngine(content_dir)
 
     context_budget = ContextBudget()
     teaching_engine = TeachingEngine(kg, char_engine, context_budget)
@@ -67,6 +73,8 @@ def _init_engines():
         character_engine=char_engine,
         teaching_engine=teaching_engine,
         state_manager=_state_manager,
+        emotion_engine=_emotion_engine,
+        event_engine=_event_engine,
     )
 
     set_narrative_engine(_narrative_engine)
