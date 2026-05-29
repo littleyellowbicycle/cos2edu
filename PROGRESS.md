@@ -90,7 +90,17 @@
 
 ---
 
-## 已知问题 / 修复项
+---
+
+## 打包待办
+
+| 项 | 说明 | 状态 |
+|----|------|------|
+| main.spec hiddenimports | 缺少 faiss-cpu, sentence_transformers, pdfplumber, python_docx, chardet, tiktoken, slowapi, limits | 重构完成后统一更新 |
+| main.spec datas | 缺少 content/ 目录（YAML 内容文件） | 重构完成后统一更新 |
+| python-jose, bcrypt, passlib | 已移除（单用户无需认证），需从 spec 中确认删除 | 重构完成后统一更新 |
+| requirements-prod.txt | Docker 用，需与 requirements.txt 同步 | 重构完成后统一更新 |
+| npm install | 用户开发时需手动执行，打包脚本已有 npm run build 步骤 | 已有 |
 
 | 优先级 | 问题 | 状态 |
 |--------|------|------|
