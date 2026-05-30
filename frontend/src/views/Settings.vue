@@ -185,6 +185,7 @@ const showApiKey = ref(false)
 const testResult = ref(null)
 const currentConfig = ref({})
 const hasConfiguredKey = ref(false)
+const originalProvider = ref('')
 const MASKED_KEY_PLACEHOLDER = '•••••••• (已配置，留空则不修改)'
 
 const form = ref({
@@ -382,9 +383,15 @@ watch(() => form.value.provider, (newProvider) => {
   if (baseUrlPlaceholders[newProvider]) {
     form.value.base_url = baseUrlPlaceholders[newProvider]
   }
-  // 切换服务商后清空 key，避免旧提供商的 key 占位符误导
-  form.value.api_key = ''
-  hasConfiguredKey.value = false
+  // 切回原始服务商 → 恢复占位符（key 没变，还在数据库里）
+  if (newProvider === originalProvider.value && currentConfig.value.has_api_key) {
+    hasConfiguredKey.value = true
+    form.value.api_key = MASKED_KEY_PLACEHOLDER
+  } else {
+    // 切到别的服务商 → 清空 key
+    form.value.api_key = ''
+    hasConfiguredKey.value = false
+  }
 })
 
 let fetchTimer = null
@@ -431,11 +438,12 @@ onMounted(async () => {
     if (configs.length > 0) {
       const config = configs[0]
       currentConfig.value = config
+      originalProvider.value = config.provider || 'openai'
       hasConfiguredKey.value = !!config.has_api_key
       form.value = {
-        provider: config.provider || 'openai',
+        provider: originalProvider.value,
         model_name: config.model_name || 'gpt-4o',
-        api_key: config.has_api_key ? MASKED_KEY_PLACEHOLDER : (config.api_key || ''),
+        api_key: hasConfiguredKey.value ? MASKED_KEY_PLACEHOLDER : (config.api_key || ''),
         base_url: config.base_url || '',
         group_id: config.group_id || ''
       }
