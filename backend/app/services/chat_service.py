@@ -237,34 +237,65 @@ class ChatService:
 
         llm = LLMProvider(config_dict)
 
+        import re
+
         full_response = ""
         buffer = ""
+        in_think = False
 
         async for chunk in llm.chat_stream(messages):
             buffer += chunk
 
             while buffer:
-                think_start = buffer.lower().find('<think>')
-                think_end = buffer.lower().find('</think>')
-
-                if think_start != -1 and think_end != -1:
-                    buffer = buffer[:think_start] + buffer[think_end + 6:]
-                elif think_start != -1:
-                    to_send = buffer[:think_start]
-                    buffer = buffer[think_start + 9:]
-                    if to_send:
-                        full_response += to_send
-                        yield to_send
-                    break
-                elif think_end != -1:
-                    buffer = buffer[think_end + 6:]
+                if in_think:
+                    close_pos = buffer.lower().find('</think>')
+                    if close_pos != -1:
+                        in_think = False
+                        buffer = buffer[close_pos + 8:]
+                    else:
+                        buffer = ""
+                        break
                 else:
-                    full_response += buffer
-                    yield buffer
-                    buffer = ""
-                    break
+                    open_pos = buffer.lower().find('<think>')
+                    close_pos = buffer.lower().find('</think>')
+                    if open_pos != -1 and (close_pos == -1 or open_pos < close_pos):
+                        to_send = buffer[:open_pos]
+                        buffer = buffer[open_pos + 7:]
+                        in_think = True
+                        if to_send:
+                            full_response += to_send
+                            yield to_send
+                    elif close_pos != -1:
+                        # Orphan </think> without opening — strip it
+                        buffer = buffer[:close_pos] + buffer[close_pos + 8:]
+                    else:
+                        # Hold back any content that could start <think> across chunks
+                        hold = 0
+                        last_lt = buffer.rfind('<')
+                        if last_lt != -1:
+                            suffix = buffer[last_lt:].lower()
+                            think_prefixes = ['<think>', '<think', '</think>', '</think']
+                            for p in think_prefixes:
+                                if p.startswith(suffix):
+                                    hold = len(buffer) - last_lt
+                                    break
+                        if hold and hold < len(buffer):
+                            safe = buffer[:-hold]
+                            buffer = buffer[-hold:]
+                            if safe:
+                                full_response += safe
+                                yield safe
+                        elif hold >= len(buffer):
+                            # Entire buffer is a potential tag prefix — hold all
+                            break
+                        else:
+                            full_response += buffer
+                            yield buffer
+                            buffer = ""
+                        break
 
         if buffer:
+            buffer = re.sub(r'<think>.*?</think>', '', buffer, flags=re.DOTALL | re.IGNORECASE)
             buffer = buffer.strip()
             if buffer:
                 full_response += buffer
