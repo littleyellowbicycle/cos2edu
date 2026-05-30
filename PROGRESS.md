@@ -47,47 +47,78 @@
 
 ---
 
-## Phase 2.0 — 考核与场景 🔄
+## Phase 2.0 — 考核与场景 🔧
 
-> 状态：未开始
+> 状态：已完成
 
-- [ ] AssessmentEngine：quiz 生成、得分计算、掌握度判定
-- [ ] NarrativeEngine 调用 AssessmentEngine 进行知识点考核
-- [ ] 前端场景切换 UI（场景卡片、时间线可视化）
-- [ ] 前端课程编辑器（查看/确认大纲、编辑知识点）
-- [ ] RAG 嵌入升级：哈希伪嵌入 → 真实嵌入（sentence-transformers / OpenAI embeddings）
-- [ ] 前端 Chat.vue 展示考核结果 + 进度条
-
----
-
-## Phase 3.0 — 多学生协作 📋
-
-> 状态：未开始
-
-- [ ] 多用户系统（认证 / 授权）
-- [ ] 学生学习分析仪表盘
-- [ ] 教师 dashboard
-- [ ] 对话历史搜索与管理增强
+- [x] AssessmentEngine：quiz 生成 (LLM prompt)、答案评分、掌握度计算、状态判定
+- [x] NarrativeEngine 集成 AssessmentEngine：自动触发考核 (should_trigger_assessment)、考核答案处理、掌握度持久化
+- [x] WS 新增 assessment.generate / assessment.answer 消息类型
+- [x] WS event: assessment.start / assessment.quiz / assessment.result
+- [x] 前端 Chat.vue：考核面板 UI (选择题+简答题)、考核结果展示、掌握度进度条
+- [x] Narrative store：currentAssessment / assessmentResult 状态管理
+- [x] useWebSocket.js：generateAssessment / submitAssessment / advanceTime 方法
+- [x] REST API：POST /assessment/generate、GET /progress/{point_id}
+- [x] 前端场景切换 UI：Timeline.vue 重构，场景卡片点击切换，时间推进按钮，WS time.advance
+- [x] 前端课程编辑器：Curriculum.vue 重构，知识点进度+掌握度、阶段折叠、一键测验按钮、同步按钮
+- [x] RAG 嵌入升级：支持 sentence-transformers / OpenAI / hash 三级 fallback
 
 ---
 
-## Phase 4.0 — 插件与自定义 🔮
+## Phase 3.0 — 单用户体验优化 ✅
 
-> 状态：未开始
+> 状态：已完成（从多用户认证改为单用户桌面应用）
 
-- [ ] Plugin 系统
-- [ ] 自定义世界观编辑器（前端 YAML 编辑器）
-- [ ] 角色创建向导（支持自定义头像、人格模板）
-- [ ] 国际化 i18n
+- [x] 学习进度 Dashboard：GET /curriculum/progress-summary（无认证）
+- [x] Dashboard.vue：学习统计卡片 + 知识点掌握度表格
+- [x] Home.vue：学习中心入口
+- [x] ~~JWT 认证系统~~ （已移除，单人桌面应用无需认证）
+- [x] ~~User 模型 / Login.vue / useUserStore / 路由守卫~~ （已移除）
+- [x] ~~Teacher Dashboard~~ （已移除，教师是虚拟角色非真实用户）
 
 ---
 
-## 已知问题 / 修复项
+## Phase 4.0 — 打磨与增强 🔧
+
+> 状态：进行中
+
+- [x] 对话历史搜索与管理增强
+  - 后端: ConversationRepository.search() 支持关键词+角色ID搜索、MessageSearchRepository 全文搜索
+  - 后端: /content/conversations/search, /content/conversations/{id}/messages/search, /content/conversations/stats API
+  - 前端: Conversations.vue 重构 — 搜索栏、角色筛选、分页、统计栏、近7天计数
+  - 前端: api/index.js 新增 conversations.search, conversations.stats, content.* 系列 API
+- [x] 世界观 YAML 编辑器
+  - 后端: /content/yaml/list, /content/yaml/{path} (GET/PUT) — 读取/保存 YAML 内容，自动备份，YAML 语法校验
+  - 前端: YamlEditor.vue — 文件列表+YAML源码编辑器+结构预览 (YamlPreview.vue 递归组件)
+  - 前端: js-yaml 客户端解析预览
+- [x] 角色创建向导
+  - 后端: /content/characters/create — 从模板创建角色 YAML 文件，自动加载到 CharacterEngine
+  - 后端: /content/characters/templates — 4 个内置模板 (苏格拉底式/实践型/学术型/故事型)
+  - 前端: CharacterCreator.vue — 4步向导 (选模板→基本信息→提示&情感→确认)
+- [x] 世界观/角色热重载
+  - 后端: POST /content/reload — 热重载 KnowledgeGraph, CharacterEngine, WorldStateEngine, EmotionEngine, EventEngine
+  - 前端: YamlEditor.vue 中"热重载"按钮
+  - WorldStateEngine.reload(), EmotionEngine.reload(), EventEngine.reload() 方法
+- [⏭] ~~国际化 i18n~~ — 单用户桌面应用、中文目标用户，暂不做
+
+---
+
+---
+
+## 打包待办
+
+| 项 | 说明 | 状态 |
+|----|------|------|
+| main.spec hiddenimports | 缺少 faiss-cpu, sentence_transformers, pdfplumber, python_docx, chardet, tiktoken, slowapi, limits | 重构完成后统一更新 |
+| main.spec datas | 缺少 content/ 目录（YAML 内容文件） | 重构完成后统一更新 |
+| python-jose, bcrypt, passlib | 已移除（单用户无需认证），需从 spec 中确认删除 | 重构完成后统一更新 |
+| requirements-prod.txt | Docker 用，需与 requirements.txt 同步 | 重构完成后统一更新 |
+| npm install | 用户开发时需手动执行，打包脚本已有 npm run build 步骤 | 已有 |
 
 | 优先级 | 问题 | 状态 |
 |--------|------|------|
-| 🔴 高 | vite build 报错 @vitejs/plugin-vue resolve | 未修复 |
-| 🟡 中 | RAG 使用哈希伪嵌入，检索精度有限 | Phase 2.0 升级 |
+| 🔴 高 | vite build 报错 @vitejs/plugin-vue resolve | ✅ 已修复（node_modules 重装） |
+| 🟡 中 | RAG 使用哈希伪嵌入，检索精度有限 | ✅ Phase 2.0 升级为三级 fallback |
 | 🟢 低 | EmotionEngine mood 判断基于关键词，未使用 LLM | 后续优化 |
 
 ---
@@ -102,5 +133,10 @@
 | WebSocket 实现 | FastAPI 内置 | 无额外依赖 |
 | 状态持久化 | Critical 即时 + Soft 60s 批量 | 平衡性能与可靠性 |
 | 大纲确认 | pending_review + 人工确认 | 质量保障 |
-| RAG MVP | FAISS + 哈希伪嵌入 | 快速可用，Phase 2 升级 |
+| RAG MVP | FAISS + 三级嵌入 fallback | sentence-transformers 优先，hash 保底 |
+| Route 修复 | /curriculum/curriculum → /curriculum | 去除重复前缀 |
 | 情感检测 | 关键词匹配 | MVP 够用，后续可加 LLM |
+| 对话搜索 | SQLAlchemy ilike + 子查询 | 标题/内容双维度搜索 |
+| YAML 编辑 | API 读写 + 自动备份 | 保存前 YAML 语法校验，.bak 回滚 |
+| 角色创建 | YAML 模板 + 向导 UI | 4 模板，创建后自动热加载到引擎 |
+| 热重载 | POST /content/reload | 不重启进程重新加载所有 YAML 内容到内存 |

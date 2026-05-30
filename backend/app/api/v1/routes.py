@@ -1,3 +1,4 @@
+import asyncio
 from typing import List, Optional
 from datetime import datetime
 import os
@@ -212,7 +213,17 @@ async def get_material(request: Request, material_id: int):
 @router.post("/materials", response_model=MaterialResponse)
 @limiter.limit("20/minute")
 async def create_material(request: Request, material: MaterialCreate):
-    return await MaterialService.create(material)
+    created = await MaterialService.create(material)
+    if created.id and created.content:
+        from app.tasks.material_pipeline import process_material
+        from app.repositories.unit_of_work import UnitOfWork
+        asyncio.create_task(process_material(
+            material_id=created.id,
+            file_path="",
+            uow_factory=UnitOfWork,
+            text=created.content,
+        ))
+    return created
 
 
 @router.put("/materials/{material_id}", response_model=MaterialResponse)
@@ -244,57 +255,66 @@ class UploadMaterialResponse(BaseModel):
 @router.post("/materials/upload", response_model=UploadMaterialResponse)
 @limiter.limit("10/minute")
 async def upload_material(request: Request, file: UploadFile = File(...)):
-    if not file.filename:
-        raise HTTPException(status_code=400, detail="请选择文件")
-    
-    file_ext = os.path.splitext(file.filename)[1].lower()
-    allowed_exts = ['.txt', '.md', '.markdown', '.text', '.pdf']
-    
-    if file_ext not in allowed_exts:
-        raise HTTPException(status_code=400, detail=f"不支持的文件格式，仅支持: {', '.join(allowed_exts)}")
-    
-    unique_filename = f"{uuid.uuid4().hex}{file_ext}"
-    file_path = os.path.join(settings.MATERIALS_DIR, unique_filename)
-    os.makedirs(settings.MATERIALS_DIR, exist_ok=True)
-    
-    content = await file.read()
-    
-    if file_ext == '.pdf':
-        try:
-            import pdfplumber
-        except ImportError:
-            raise HTTPException(
-                status_code=500,
-                detail="PDF解析库未安装，请联系管理员安装 pdfplumber"
-            )
-        text_parts = []
-        with pdfplumber.open(io.BytesIO(content)) as pdf:
-            for page in pdf.pages:
-                page_text = page.extract_text()
-                if page_text:
-                    text_parts.append(page_text)
-        text = '\n'.join(text_parts)
-        if not text.strip():
-            raise HTTPException(
-                status_code=400,
-                detail="PDF文件无法提取文字内容，可能是扫描版或图片型PDF，请尝试转换为文本格式后上传"
-            )
-    else:
-        try:
-            text = content.decode('utf-8')
-        except UnicodeDecodeError:
+    try:
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="请选择文件")
+
+        file_ext = os.path.splitext(file.filename)[1].lower()
+        allowed_exts = ['.txt', '.md', '.markdown', '.text', '.pdf']
+
+        if file_ext not in allowed_exts:
+            raise HTTPException(status_code=400, detail=f"不支持的文件格式，仅支持: {', '.join(allowed_exts)}")
+
+        unique_filename = f"{uuid.uuid4().hex}{file_ext}"
+        file_path = os.path.join(settings.MATERIALS_DIR, unique_filename)
+        os.makedirs(settings.MATERIALS_DIR, exist_ok=True)
+
+        content = await file.read()
+        file_size_mb = len(content) / (1024 * 1024)
+
+        if file_ext == '.pdf':
             try:
-                text = content.decode('gbk')
-            except:
-                text = content.decode('utf-8', errors='ignore')
-    
-    async with aiofiles.open(file_path, 'w', encoding='utf-8') as f:
-        await f.write(text)
-    
-    return UploadMaterialResponse(
-        content_url=unique_filename,
-        filename=file.filename
-    )
+                import pdfplumber
+            except ImportError:
+                raise HTTPException(
+                    status_code=500,
+                    detail="PDF解析库未安装，请联系管理员安装 pdfplumber"
+                )
+            text_parts = []
+            with pdfplumber.open(io.BytesIO(content)) as pdf:
+                for page in pdf.pages:
+                    page_text = page.extract_text()
+                    if page_text:
+                        text_parts.append(page_text)
+            text = '\n'.join(text_parts)
+            if not text.strip():
+                raise HTTPException(
+                    status_code=400,
+                    detail="PDF文件无法提取文字内容，可能是扫描版或图片型PDF，请尝试转换为文本格式后上传"
+                )
+        else:
+            try:
+                text = content.decode('utf-8')
+            except UnicodeDecodeError:
+                try:
+                    text = content.decode('gbk')
+                except:
+                    text = content.decode('utf-8', errors='ignore')
+
+        async with aiofiles.open(file_path, 'w', encoding='utf-8') as f:
+            await f.write(text)
+
+        logger.info(f"Uploaded material: filename={file.filename}, size={file_size_mb:.1f}MB, saved_as={unique_filename}")
+
+        return UploadMaterialResponse(
+            content_url=unique_filename,
+            filename=file.filename
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Upload material failed: {type(e).__name__}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"文件上传失败: {str(e)}")
 
 
 @router.post("/materials/{material_id}/generate-summary")
@@ -324,6 +344,32 @@ async def generate_material_summary_async(material_id: int):
     
     asyncio.create_task(_generate())
     return {"message": "概括生成中..."}
+
+
+@router.post("/materials/repair-stuck")
+async def repair_stuck_materials():
+    """Re-process materials stuck at 'parsing' status."""
+    from app.tasks.material_pipeline import process_material
+    from app.repositories.unit_of_work import UnitOfWork
+
+    async with UnitOfWork() as uow:
+        stuck = await uow.materials.get_by_status("parsing")
+
+    if not stuck:
+        return {"message": "没有卡住的教学材料", "repaired": 0}
+
+    repaired = []
+    for material in stuck:
+        if material.content:
+            asyncio.create_task(process_material(
+                material_id=material.id,
+                file_path="",
+                uow_factory=UnitOfWork,
+                text=material.content,
+            ))
+            repaired.append(material.id)
+
+    return {"message": f"已触发 {len(repaired)} 个材料的后台处理", "repaired": repaired}
 
 
 async def _call_llm_for_summary(content: str) -> str:

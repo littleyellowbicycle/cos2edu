@@ -11,7 +11,7 @@
         </p>
         <div class="hero-actions">
           <router-link to="/characters" class="btn btn-primary">开始探索</router-link>
-          <router-link to="/conversations" class="btn btn-secondary">继续对话</router-link>
+          <router-link to="/dashboard" class="btn btn-secondary">学习中心</router-link>
         </div>
       </div>
       <div class="hero-decoration">
@@ -45,6 +45,24 @@
           <div class="feature-icon">⚙</div>
           <h3>设置</h3>
           <p>配置 AI 模型和 API Key，确保对话功能正常运行</p>
+          <span class="feature-arrow">→</span>
+        </div>
+        <div class="feature-card" @click="$router.push('/characters/create')">
+          <div class="feature-icon">✦</div>
+          <h3>创建角色</h3>
+          <p>从模板快速创建教学角色，自定义性格和情感配置</p>
+          <span class="feature-arrow">→</span>
+        </div>
+        <div class="feature-card" @click="$router.push('/editor')">
+          <div class="feature-icon"></div>
+          <h3>内容编辑器</h3>
+          <p>可视化编辑课程大纲、角色配置和世界观设定 YAML</p>
+          <span class="feature-arrow">→</span>
+        </div>
+        <div class="feature-card" @click="$router.push('/dashboard')">
+          <div class="feature-icon">📊</div>
+          <h3>学习中心</h3>
+          <p>查看学习进度、掌握度分析和薄弱环节</p>
           <span class="feature-arrow">→</span>
         </div>
       </div>

@@ -1,9 +1,11 @@
-from typing import Optional
-from pydantic import BaseModel, Field, field_validator, ConfigDict
+from typing import Optional, Any
+from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 from datetime import datetime
 
 
 class ModelConfigBase(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
     provider: str = Field(..., min_length=1, description="模型提供商")
     model_name: str = Field(..., min_length=1, max_length=100, description="模型名称")
     api_key: Optional[str] = Field(None, max_length=500, description="API密钥")
@@ -40,6 +42,8 @@ class ModelConfigCreate(ModelConfigBase):
 
 
 class ModelConfigUpdate(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
     provider: Optional[str] = Field(None, min_length=1)
     model_name: Optional[str] = Field(None, min_length=1, max_length=100)
     api_key: Optional[str] = Field(None, max_length=500)
@@ -74,13 +78,27 @@ class ModelConfigUpdate(BaseModel):
 
 
 class ModelConfigResponse(BaseModel):
+    model_config = ConfigDict(protected_namespaces=(), from_attributes=True)
+
     id: int = Field(..., ge=1, description="配置ID")
     provider: str
     model_name: str
     base_url: Optional[str] = None
+    has_api_key: bool = Field(default=False, description="是否已配置 API Key")
     is_default: bool
     is_active: bool
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    @model_validator(mode="before")
+    @classmethod
+    def resolve_has_api_key(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            api_key = data.get("api_key")
+        else:
+            api_key = getattr(data, "api_key", None)
+        if isinstance(data, dict):
+            data["has_api_key"] = bool(api_key)
+        else:
+            data.has_api_key = bool(api_key)
+        return data

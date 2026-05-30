@@ -90,8 +90,7 @@
                 id="apiKey" 
                 v-model="form.api_key" 
                 :type="showApiKey ? 'text' : 'password'"
-                :placeholder="apiKeyPlaceholders[form.provider] || 'sk-...'"
-                required
+                :placeholder="hasConfiguredKey ? MASKED_KEY_PLACEHOLDER : (apiKeyPlaceholders[form.provider] || 'sk-...')"
               />
               <button 
                 type="button" 
@@ -101,6 +100,7 @@
                 {{ showApiKey ? '隐藏' : '显示' }}
               </button>
             </div>
+            <p v-if="hasConfiguredKey && form.api_key === MASKED_KEY_PLACEHOLDER" class="form-hint">已保存的 Key 不会被重新读取，留空则不修改</p>
           </div>
 
           <div class="form-group">
@@ -146,7 +146,9 @@
           </div>
           <div class="config-item">
             <span class="config-label">API Key</span>
-            <span class="config-value">{{ currentConfig.id ? '已配置' : '未配置' }}</span>
+            <span class="config-value" :class="{ 'key-configured': currentConfig.has_api_key }">
+              {{ currentConfig.has_api_key ? '✓ 已配置' : '未配置' }}
+            </span>
           </div>
         </div>
       </section>
@@ -182,6 +184,9 @@ const testing = ref(false)
 const showApiKey = ref(false)
 const testResult = ref(null)
 const currentConfig = ref({})
+const hasConfiguredKey = ref(false)
+const originalProvider = ref('')
+const MASKED_KEY_PLACEHOLDER = '•••••••• (已配置，留空则不修改)'
 
 const form = ref({
   provider: 'openai',
@@ -378,6 +383,15 @@ watch(() => form.value.provider, (newProvider) => {
   if (baseUrlPlaceholders[newProvider]) {
     form.value.base_url = baseUrlPlaceholders[newProvider]
   }
+  // 切回原始服务商 → 恢复占位符（key 没变，还在数据库里）
+  if (newProvider === originalProvider.value && currentConfig.value.has_api_key) {
+    hasConfiguredKey.value = true
+    form.value.api_key = MASKED_KEY_PLACEHOLDER
+  } else {
+    // 切到别的服务商 → 清空 key
+    form.value.api_key = ''
+    hasConfiguredKey.value = false
+  }
 })
 
 let fetchTimer = null
@@ -413,7 +427,7 @@ async function fetchProviderModels(showMessage = false) {
 
 watch(() => form.value.api_key, () => {
   clearTimeout(fetchTimer)
-  if (form.value.api_key) {
+  if (form.value.api_key && form.value.api_key !== MASKED_KEY_PLACEHOLDER) {
     fetchTimer = setTimeout(() => fetchProviderModels(), 500)
   }
 })
@@ -424,16 +438,16 @@ onMounted(async () => {
     if (configs.length > 0) {
       const config = configs[0]
       currentConfig.value = config
+      originalProvider.value = config.provider || 'openai'
+      hasConfiguredKey.value = !!config.has_api_key
       form.value = {
-        provider: config.provider || 'openai',
+        provider: originalProvider.value,
         model_name: config.model_name || 'gpt-4o',
-        api_key: config.api_key || '',
+        api_key: hasConfiguredKey.value ? MASKED_KEY_PLACEHOLDER : (config.api_key || ''),
         base_url: config.base_url || '',
         group_id: config.group_id || ''
       }
-      if (form.value.api_key) {
-        fetchProviderModels()
-      }
+      // 已有 key 但前端拿不到原文，无法从 API 刷新模型列表，使用本地默认列表
     }
   } catch (e) {
     console.error(e)
@@ -443,19 +457,25 @@ onMounted(async () => {
 })
 
 async function handleSubmit() {
-  if (!form.value.api_key.trim()) {
-    ElMessage.warning('请输入 API Key')
-    return
-  }
-
   saving.value = true
   try {
+    const submitData = { ...form.value }
+    // If api_key is the masked placeholder, omit it to keep the existing key
+    if (submitData.api_key === MASKED_KEY_PLACEHOLDER) {
+      delete submitData.api_key
+    }
+    if (!submitData.api_key && !hasConfiguredKey.value) {
+      ElMessage.warning('请输入 API Key')
+      saving.value = false
+      return
+    }
+
     const configs = await api.modelConfigs.getAll()
     if (configs.length > 0) {
-      await api.modelConfigs.update(configs[0].id, form.value)
+      await api.modelConfigs.update(configs[0].id, submitData)
     } else {
       await api.modelConfigs.create({
-        ...form.value,
+        ...submitData,
         is_default: true,
         is_active: true
       })
@@ -464,6 +484,10 @@ async function handleSubmit() {
     const configs2 = await api.modelConfigs.getAll()
     if (configs2.length > 0) {
       currentConfig.value = configs2[0]
+      hasConfiguredKey.value = !!configs2[0].has_api_key
+      if (!hasConfiguredKey.value) {
+        form.value.api_key = configs2[0].api_key || ''
+      }
     }
     
     ElMessage.success('配置已保存')
@@ -756,6 +780,10 @@ async function testConnection() {
   font-size: 14px;
   font-weight: 500;
   color: var(--color-ink);
+}
+
+.config-value.key-configured {
+  color: #2E7D32;
 }
 
 .test-section {

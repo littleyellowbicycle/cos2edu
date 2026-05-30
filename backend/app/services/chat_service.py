@@ -222,54 +222,86 @@ class ChatService:
 
             messages = await ChatService._build_messages(conversation, user_message)
 
-            config_dict = None
-            if model_config:
-                config_dict = {
-                    "provider": model_config.provider,
-                    "model_name": model_config.model_name,
-                    "api_key": model_config.api_key,
-                    "base_url": model_config.base_url,
-                    "group_id": getattr(model_config, 'group_id', None)
-                }
-                logger.info(f"[Chat] model_config: provider={model_config.provider}, model={model_config.model_name}, base_url={model_config.base_url}")
-            else:
-                logger.warning("[Chat] No model_config provided")
+        config_dict = None
+        if model_config:
+            config_dict = {
+                "provider": model_config.provider,
+                "model_name": model_config.model_name,
+                "api_key": model_config.api_key,
+                "base_url": model_config.base_url,
+                "group_id": getattr(model_config, 'group_id', None)
+            }
+            logger.info(f"[Chat] model_config: provider={model_config.provider}, model={model_config.model_name}, base_url={model_config.base_url}")
+        else:
+            logger.warning("[Chat] No model_config provided")
 
-            llm = LLMProvider(config_dict)
+        llm = LLMProvider(config_dict)
 
-            full_response = ""
-            buffer = ""
-            
-            async for chunk in llm.chat_stream(messages):
-                buffer += chunk
-                
-                while buffer:
-                    think_start = buffer.lower().find('<think>')
-                    think_end = buffer.lower().find('</think>')
-                    
-                    if think_start != -1 and think_end != -1:
-                        buffer = buffer[:think_start] + buffer[think_end + 6:]
-                    elif think_start != -1:
-                        to_send = buffer[:think_start]
-                        buffer = buffer[think_start + 9:]
+        import re
+
+        full_response = ""
+        buffer = ""
+        in_think = False
+
+        async for chunk in llm.chat_stream(messages):
+            buffer += chunk
+
+            while buffer:
+                if in_think:
+                    close_pos = buffer.lower().find('</think>')
+                    if close_pos != -1:
+                        in_think = False
+                        buffer = buffer[close_pos + 8:]
+                    else:
+                        buffer = ""
+                        break
+                else:
+                    open_pos = buffer.lower().find('<think>')
+                    close_pos = buffer.lower().find('</think>')
+                    if open_pos != -1 and (close_pos == -1 or open_pos < close_pos):
+                        to_send = buffer[:open_pos]
+                        buffer = buffer[open_pos + 7:]
+                        in_think = True
                         if to_send:
                             full_response += to_send
                             yield to_send
-                        break
-                    elif think_end != -1:
-                        buffer = buffer[think_end + 6:]
+                    elif close_pos != -1:
+                        # Orphan </think> without opening — strip it
+                        buffer = buffer[:close_pos] + buffer[close_pos + 8:]
                     else:
-                        full_response += buffer
-                        yield buffer
-                        buffer = ""
+                        # Hold back any content that could start <think> across chunks
+                        hold = 0
+                        last_lt = buffer.rfind('<')
+                        if last_lt != -1:
+                            suffix = buffer[last_lt:].lower()
+                            think_prefixes = ['<think>', '<think', '</think>', '</think']
+                            for p in think_prefixes:
+                                if p.startswith(suffix):
+                                    hold = len(buffer) - last_lt
+                                    break
+                        if hold and hold < len(buffer):
+                            safe = buffer[:-hold]
+                            buffer = buffer[-hold:]
+                            if safe:
+                                full_response += safe
+                                yield safe
+                        elif hold >= len(buffer):
+                            # Entire buffer is a potential tag prefix — hold all
+                            break
+                        else:
+                            full_response += buffer
+                            yield buffer
+                            buffer = ""
                         break
-            
-            if buffer:
-                buffer = buffer.strip()
-                if buffer:
-                    full_response += buffer
-                    yield buffer
 
+        if buffer:
+            buffer = re.sub(r'<think>.*?</think>', '', buffer, flags=re.DOTALL | re.IGNORECASE)
+            buffer = buffer.strip()
+            if buffer:
+                full_response += buffer
+                yield buffer
+
+        async with UnitOfWork() as uow:
             await uow.messages.create({
                 "conversation_id": conversation_id,
                 "role": "assistant",
@@ -285,6 +317,7 @@ class ChatService:
     @staticmethod
     async def _build_messages(conversation, user_message: str) -> List[Dict[str, str]]:
         messages = []
+        system_parts = []
 
         if conversation.character:
             system_prompt = f"你扮演的角色是 {conversation.character.name}。"
@@ -292,39 +325,58 @@ class ChatService:
                 system_prompt += f" 性格特点: {conversation.character.personality}"
             if conversation.character.background:
                 system_prompt += f" 背景: {conversation.character.background}"
-            messages.append({"role": "system", "content": system_prompt})
+            system_parts.append(system_prompt)
 
         if conversation.material:
-            material_content = ""
-            if conversation.material.content_type == 'url' and conversation.material.content_url:
-                material_content = f"教材URL: {conversation.material.content_url}\n\n请根据这个URL的内容回答用户的问题。"
-            elif conversation.material.content:
-                material_content = conversation.material.content
-            elif conversation.material.content_url:
-                import os
-                import aiofiles
-                file_path = os.path.join(settings.MATERIALS_DIR, conversation.material.content_url)
-                if os.path.exists(file_path):
-                    async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
-                        material_content = await f.read()
-                    if not material_content:
+            material_title = conversation.material.title
+
+            # Try RAG retrieval first
+            rag_context = ""
+            try:
+                from app.services.rag_service import get_rag_service
+                rag = get_rag_service()
+                if rag.is_ready:
+                    rag_context = rag.get_context(user_message, max_tokens=1500)
+            except Exception:
+                pass
+
+            if rag_context:
+                system_parts.append(f"教材信息: {material_title}\n\n参考资料:\n{rag_context}")
+            else:
+                # Fallback: read raw content
+                material_content = ""
+                if conversation.material.content_type == 'url' and conversation.material.content_url:
+                    material_content = f"教材URL: {conversation.material.content_url}\n\n请根据这个URL的内容回答用户的问题。"
+                elif conversation.material.content:
+                    material_content = conversation.material.content
+                elif conversation.material.content_url:
+                    import os
+                    import aiofiles
+                    file_path = os.path.join(settings.MATERIALS_DIR, conversation.material.content_url)
+                    if os.path.exists(file_path):
+                        async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
+                            material_content = await f.read()
+                        if not material_content:
+                            raise ValueError(
+                                f"教材「{material_title}」的内容为空，PDF 可能无法提取文字（如扫描版），"
+                                f"请转换为文本格式后重新上传"
+                            )
+                    else:
                         raise ValueError(
-                            f"教材「{conversation.material.title}」的内容为空，PDF 可能无法提取文字（如扫描版），"
-                            f"请转换为文本格式后重新上传"
+                            f"教材「{material_title}」的文件未找到（{conversation.material.content_url}），"
+                            f"请重新上传教材文件"
                         )
-                else:
-                    raise ValueError(
-                        f"教材「{conversation.material.title}」的文件未找到（{conversation.material.content_url}），"
-                        f"请重新上传教材文件"
-                    )
-            
-            if not material_content:
-                raise ValueError(f"教材「{conversation.material.title}」没有内容。请检查教材是否已上传文件，或内容是否为空。")
-            
-            messages.append({
-                "role": "system",
-                "content": f"教材信息: {conversation.material.title}\n\n{material_content}"
-            })
+
+                if not material_content:
+                    raise ValueError(f"教材「{material_title}」没有内容。请检查教材是否已上传文件，或内容是否为空。")
+
+                if len(material_content) > 4000:
+                    material_content = material_content[:4000] + "\n\n... (内容过长已截断，请询问用户是否需要了解更详细的教材信息)"
+
+                system_parts.append(f"教材信息: {material_title}\n\n{material_content}")
+
+        if system_parts:
+            messages.append({"role": "system", "content": "\n\n".join(system_parts)})
 
         async with UnitOfWork() as uow:
             history = await uow.messages.get_by_conversation(conversation.id)

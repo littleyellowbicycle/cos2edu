@@ -8,8 +8,9 @@ from app.engines.teaching_engine import TeachingEngine
 from app.engines.character_engine import CharacterEngine
 from app.engines.emotion_engine import EmotionEngine, EmotionUpdate
 from app.engines.event_engine import EventEngine, TriggeredEvent
+from app.engines.assessment_engine import AssessmentEngine, AssessmentResult, Quiz
 from app.state.state_manager import StateManager
-from app.services.chat_service import ChatService
+from app.services.chat_service import ChatService, LLMProvider
 from app.services.rag_service import get_rag_service
 from app.repositories.unit_of_work import UnitOfWork
 from app.core.logging_config import get_logger
@@ -29,6 +30,7 @@ class NarrativeEngine:
         state_manager: StateManager,
         emotion_engine: EmotionEngine = None,
         event_engine: EventEngine = None,
+        assessment_engine: AssessmentEngine = None,
     ):
         self.graph = knowledge_graph
         self.world = world_state_engine
@@ -37,7 +39,10 @@ class NarrativeEngine:
         self.state_manager = state_manager
         self.emotion = emotion_engine
         self.events = event_engine
+        self.assessment = assessment_engine or AssessmentEngine()
         self.rag = get_rag_service()
+        self._message_counts: dict[int, int] = {}
+        self._active_quizzes: dict[str, "Quiz"] = {}
 
     async def handle_chat_message(
         self,
@@ -52,12 +57,6 @@ class NarrativeEngine:
                 conversation = await uow.conversations.get_by_id(conversation_id)
                 if not conversation:
                     raise ValueError(f"Conversation {conversation_id} not found")
-
-                await uow.messages.create({
-                    "conversation_id": conversation_id,
-                    "role": "user",
-                    "content": user_message,
-                })
 
                 mastered = await self._get_mastered_points(uow)
                 point_data = self.teaching.get_next_teaching_point(mastered)
@@ -80,16 +79,33 @@ class NarrativeEngine:
                 for msg in history[-20:]:
                     history_messages.append({"role": msg.role, "content": msg.content})
 
+                self._message_counts[conversation_id] = self._message_counts.get(conversation_id, 0) + 1
+
                 if point_data:
-                    messages = self.teaching.build_teaching_prompt(
-                        point_data=point_data,
-                        character_id=character_id,
-                        scene_id=scene.id,
-                        allowed_actions=scene.allowed_actions,
-                        emotion_summary=emotion_summary,
-                        history=history_messages,
-                        rag_context=rag_context,
-                    )
+                    # Phase 2.0: Check if assessment should be triggered
+                    if self.assessment and self.assessment.should_trigger_assessment(
+                        point_id=point_data["point_id"],
+                        mastered_points=mastered,
+                        message_count=self._message_counts[conversation_id],
+                    ):
+                        yield json.dumps({
+                            "type": "assessment.start",
+                            "payload": {
+                                "point_id": point_data["point_id"],
+                                "point_name": point_data["name"],
+                                "message": f"很好！我们已经讨论了「{point_data['name']}」的核心概念。让我们来做个小测验，检验一下你的理解。",
+                            },
+                        }, ensure_ascii=False)
+                    else:
+                        messages = self.teaching.build_teaching_prompt(
+                            point_data=point_data,
+                            character_id=character_id,
+                            scene_id=scene.id,
+                            allowed_actions=scene.allowed_actions,
+                            emotion_summary=emotion_summary,
+                            history=history_messages,
+                            rag_context=rag_context,
+                        )
                 else:
                     messages = self._build_default_prompt(
                         character_id=character_id,
@@ -156,6 +172,174 @@ class NarrativeEngine:
             logger.error(f"NarrativeEngine chat error: {e}", exc_info=True)
             yield json.dumps({"type": "error", "content": str(e)}, ensure_ascii=False)
 
+    async def handle_assessment_answer(
+        self,
+        conversation_id: int,
+        point_id: str,
+        answers: list[dict],
+        character_id: str,
+    ) -> dict:
+        """处理考核答案，返回 AssessmentResult"""
+        if not self.assessment:
+            return {"error": "AssessmentEngine not initialized"}
+
+        async with UnitOfWork() as uow:
+            progress_records = await uow.session.execute(
+                __import__("sqlalchemy").select(
+                    __import__("sqlalchemy").func.count()
+                ).where(
+                    __import__("sqlalchemy").true()
+                )
+            )
+
+        scores = []
+        correct_count = 0
+        for q, a in answers:
+            if isinstance(a, str) and isinstance(q, dict):
+                result = self.assessment.evaluate_answer(q, a)
+                scores.append(result["score"])
+                if result["is_correct"]:
+                    correct_count += 1
+
+        existing = await self._get_progress_for_point(point_id)
+        attempts = (existing.get("attempts", 0) if existing else 0) + 1
+
+        assessment_result = self.assessment.assess_point(
+            point_id=point_id,
+            scores=scores,
+            attempts=attempts,
+        )
+
+        await self.state_manager.update("mastery_change", {
+            "point_id": point_id,
+            "mastery": assessment_result.mastery_level,
+            "status": assessment_result.status,
+        })
+
+        if self.emotion:
+            if assessment_result.passed:
+                self.emotion.update(character_id, "student_correct", 0.08)
+            else:
+                self.emotion.update(character_id, "student_wrong", -0.03)
+
+        return {
+            "point_id": assessment_result.point_id,
+            "passed": assessment_result.passed,
+            "mastery_level": assessment_result.mastery_level,
+            "status": assessment_result.status,
+            "feedback": assessment_result.feedback,
+            "score": assessment_result.score,
+            "attempts": assessment_result.attempts,
+        }
+
+    async def generate_quiz(
+        self,
+        point_id: str,
+        character_id: str,
+        model_config=None,
+    ) -> dict:
+        """使用 LLM 生成考核题目"""
+        point_meta = self.graph.get_point(point_id)
+        if not point_meta:
+            return {"error": f"Knowledge point {point_id} not found"}
+
+        point_data = {
+            "point_id": point_meta.id,
+            "name": point_meta.name,
+            "key_concepts": point_meta.key_concepts,
+            "difficulty": point_meta.difficulty,
+            "exercises": point_meta.exercises or [],
+        }
+
+        if not self.assessment:
+            return {"error": "AssessmentEngine not initialized"}
+
+        prompt = self.assessment.generate_quiz_prompt(point_data, character_id)
+
+        try:
+            async with UnitOfWork() as uow:
+                config_obj = await uow.model_configs.get_default()
+                if not config_obj:
+                    return {"error": "No default model config"}
+
+                config_dict = {
+                    "provider": config_obj.provider,
+                    "model_name": config_obj.model_name,
+                    "api_key": config_obj.api_key,
+                    "base_url": config_obj.base_url,
+                    "group_id": getattr(config_obj, "group_id", None),
+                }
+
+            llm = LLMProvider(config_dict)
+            messages = [{"role": "user", "content": prompt}]
+            response = await llm.chat(messages)
+
+            response = response.strip()
+            if response.startswith("```json"):
+                response = response[7:]
+            if response.startswith("```"):
+                response = response[3:]
+            if response.endswith("```"):
+                response = response[:-3]
+            response = response.strip()
+
+            quiz_data = json.loads(response)
+            return {
+                "point_id": point_id,
+                "point_name": point_meta.name,
+                "quiz": quiz_data,
+            }
+        except json.JSONDecodeError as e:
+            logger.error(f"Quiz generation JSON parse error: {e}")
+            return {"error": "Failed to parse quiz from LLM response"}
+        except Exception as e:
+            logger.error(f"Quiz generation failed: {e}")
+            return {"error": str(e)}
+
+    def start_assessment(self, knowledge_point_id: str, num_questions: int = 4) -> "Quiz":
+        point_meta = self.graph.get_point(knowledge_point_id)
+        if not point_meta:
+            raise ValueError(f"Knowledge point '{knowledge_point_id}' not found")
+
+        point_data = {
+            "id": point_meta.id,
+            "name": point_meta.name,
+            "difficulty": point_meta.difficulty,
+            "key_concepts": point_meta.key_concepts,
+            "suggested_questions": point_meta.suggested_questions,
+            "exercises": point_meta.exercises,
+        }
+
+        quiz = self.assessment.generate_quiz(point_data, num_questions=num_questions)
+        self._active_quizzes[knowledge_point_id] = quiz
+        return quiz
+
+    def submit_assessment_answer(
+        self,
+        knowledge_point_id: str,
+        answers: list[int],
+    ) -> "QuizResult":
+        from app.engines.assessment_engine import QuizResult
+
+        quiz = self._active_quizzes.get(knowledge_point_id)
+        if not quiz:
+            raise ValueError(f"No active quiz for knowledge point '{knowledge_point_id}'. Call start_assessment first.")
+
+        correct = sum(
+            1 for i, answer in enumerate(answers)
+            if i < len(quiz.questions) and answer == quiz.questions[i].correct_answer
+        )
+
+        result = self.assessment.score_quiz(
+            knowledge_point_id=knowledge_point_id,
+            total_questions=len(quiz.questions),
+            correct_answers=correct,
+        )
+
+        self._active_quizzes.pop(knowledge_point_id, None)
+
+        return result
+
     def _mood_to_description(self, mood: float) -> str:
         if mood > 0.85:
             return "非常开心和兴奋"
@@ -212,6 +396,27 @@ class NarrativeEngine:
         )
         points = result.scalars().all()
         return {p.knowledge_point_id for p in points}
+
+    async def _get_progress_for_point(self, point_id: str) -> Optional[dict]:
+        try:
+            async with UnitOfWork() as uow:
+                from models.learning_progress import LearningProgress
+                from sqlalchemy import select
+                result = await uow.session.execute(
+                    select(LearningProgress).where(
+                        LearningProgress.knowledge_point_id == point_id
+                    )
+                )
+                progress = result.scalar_one_or_none()
+                if progress:
+                    return {
+                        "mastery_level": progress.mastery_level,
+                        "status": progress.status,
+                        "attempts": progress.attempts,
+                    }
+        except Exception as e:
+            logger.error(f"Failed to get progress for point {point_id}: {e}")
+        return None
 
     async def get_full_snapshot(self) -> dict:
         """返回完整状态快照，用于 WS 重连对账"""

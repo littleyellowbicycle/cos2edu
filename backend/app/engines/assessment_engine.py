@@ -1,6 +1,9 @@
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, List
+from datetime import datetime
 
+from app.graph.knowledge_graph import KnowledgeGraph
+from app.engines.character_engine import CharacterEngine
 from app.core.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -32,8 +35,189 @@ class QuizResult:
     feedback: str = ""
 
 
+@dataclass
+class AssessmentResult:
+    point_id: str
+    score: float
+    passed: bool
+    mastery_level: float
+    status: str
+    feedback: str
+    attempts: int
+
+
 class AssessmentEngine:
+    """考核引擎：生成测验、评分、判定掌握度"""
+
+    MASTERY_THRESHOLD = 0.7
+    PASS_THRESHOLD = 0.6
+    MAX_ATTEMPTS = 3
     PASSING_THRESHOLD = 0.6
+
+    def __init__(
+        self,
+        knowledge_graph: Optional[KnowledgeGraph] = None,
+        character_engine: Optional[CharacterEngine] = None,
+    ):
+        self.graph = knowledge_graph
+        self.character_engine = character_engine
+
+    # --- LLM-based quiz generation (remote) ---
+
+    def generate_quiz_prompt(
+        self,
+        point_data: dict,
+        character_id: str,
+        num_questions: int = 3,
+    ) -> str:
+        point_id = point_data.get("point_id", "")
+        point_name = point_data.get("name", "")
+        key_concepts = point_data.get("key_concepts", [])
+        difficulty = point_data.get("difficulty", 1)
+        exercises = point_data.get("exercises", [])
+
+        char_style = ""
+        if self.character_engine:
+            character = self.character_engine.get_character(character_id)
+            if character:
+                char_style = f"以{character.name}的风格（{character.personality}）出题。"
+
+        exercise_hint = ""
+        if exercises:
+            exercise_hint = f"\n参考练习题方向：{', '.join(exercises[:3])}"
+
+        prompt = (
+            f"你是一位考核出题专家。{char_style}\n\n"
+            f"知识点：{point_name}\n"
+            f"核心概念：{', '.join(key_concepts)}\n"
+            f"难度：{difficulty}/5\n"
+            f"题目数量：{num_questions}道\n{exercise_hint}\n\n"
+            f"请严格按以下JSON格式输出（不要输出其他内容）：\n"
+            f"{{\n"
+            f'  "questions": [\n'
+            f"    {{\n"
+            f'      "question_type": "choice",\n'
+            f'      "question_text": "题目内容",\n'
+            f'      "options": ["选项A", "选项B", "选项C", "选项D"],\n'
+            f'      "correct_answer": "选项A",\n'
+            f'      "explanation": "答案解析"\n'
+            f"    }},\n"
+            f"    {{\n"
+            f'      "question_type": "open",\n'
+            f'      "question_text": "简答题",\n'
+            f'      "correct_answer": "参考答案关键词",\n'
+            f'      "explanation": "答案解析"\n'
+            f"    }}\n"
+            f"  ]\n"
+            f"}}"
+        )
+
+        return prompt
+
+    def evaluate_answer(
+        self,
+        question: dict,
+        user_answer: str,
+    ) -> dict:
+        correct_answer = question.get("correct_answer", "")
+        question_type = question.get("question_type", "choice")
+
+        if question_type == "choice":
+            is_correct = user_answer.strip() == correct_answer.strip()
+            score = 1.0 if is_correct else 0.0
+        else:
+            is_correct = False
+            score = 0.0
+            correct_keywords = [kw.strip() for kw in correct_answer.split(",") if kw.strip()]
+            if correct_keywords:
+                matched = sum(1 for kw in correct_keywords if kw in user_answer)
+                score = matched / len(correct_keywords)
+                is_correct = score >= self.MASTERY_THRESHOLD
+
+        return {
+            "is_correct": is_correct,
+            "score": score,
+            "correct_answer": correct_answer,
+            "explanation": question.get("explanation", ""),
+        }
+
+    def calculate_mastery(
+        self,
+        scores: list[float],
+        attempts: int,
+    ) -> float:
+        if not scores:
+            return 0.0
+        avg_score = sum(scores) / len(scores)
+        attempt_penalty = max(0, (attempts - 1)) * 0.1
+        mastery = max(0.0, min(1.0, avg_score - attempt_penalty))
+        return round(mastery, 2)
+
+    def determine_status(self, mastery_level: float, attempts: int) -> str:
+        if mastery_level >= self.MASTERY_THRESHOLD:
+            return "mastered"
+        elif mastery_level >= self.PASS_THRESHOLD:
+            return "learning"
+        elif attempts >= self.MAX_ATTEMPTS:
+            return "review_needed"
+        else:
+            return "learning"
+
+    def assess_point(
+        self,
+        point_id: str,
+        scores: list[float],
+        attempts: int,
+    ) -> AssessmentResult:
+        mastery_level = self.calculate_mastery(scores, attempts)
+        passed = mastery_level >= self.MASTERY_THRESHOLD
+        status = self.determine_status(mastery_level, attempts)
+
+        point_name = point_id
+        if self.graph:
+            point_meta = self.graph.get_point(point_id)
+            if point_meta:
+                point_name = point_meta.name
+
+        if passed:
+            feedback = f"恭喜！你已经掌握了「{point_name}」，可以进入下一个知识点。"
+        elif mastery_level >= self.PASS_THRESHOLD:
+            feedback = f"你对「{point_name}」有基本理解，但还需要加强。建议再练习一下。"
+        elif attempts >= self.MAX_ATTEMPTS:
+            feedback = f"「{point_name}」需要重新复习。角色导师将会重新讲解这个知识点。"
+        else:
+            feedback = f"继续努力！你对「{point_name}」的理解还在发展中。"
+
+        return AssessmentResult(
+            point_id=point_id,
+            score=sum(scores) / len(scores) if scores else 0.0,
+            passed=passed,
+            mastery_level=mastery_level,
+            status=status,
+            feedback=feedback,
+            attempts=attempts,
+        )
+
+    def should_trigger_assessment(
+        self,
+        point_id: str,
+        mastered_points: set[str],
+        message_count: int,
+        last_assessment_at: Optional[datetime] = None,
+    ) -> bool:
+        if point_id in mastered_points:
+            return False
+        if message_count < 3:
+            return False
+        if message_count % 5 != 0:
+            return False
+        if last_assessment_at:
+            delta = (datetime.now() - last_assessment_at).total_seconds()
+            if delta < 120:
+                return False
+        return True
+
+    # --- Template-based quiz generation (local) ---
 
     def generate_quiz(
         self,
@@ -60,7 +244,7 @@ class AssessmentEngine:
 
         while len(questions) < num_questions and key_concepts:
             concept = key_concepts[len(questions) % len(key_concepts)]
-            question_text = f"\u5173\u4e8e\u300c{concept}\u300d\uff0c\u4ee5\u4e0b\u54ea\u4e2a\u8bf4\u6cd5\u662f\u6b63\u786e\u7684\uff1f"
+            question_text = f"关于「{concept}」，以下哪个说法是正确的？"
             options = self._generate_concept_options(concept, key_concepts)
             questions.append(QuizQuestion(
                 question_text=question_text,
@@ -92,13 +276,13 @@ class AssessmentEngine:
 
         if passed:
             if mastery_level >= 0.9:
-                feedback = "\u4f18\u79c0\uff01\u4f60\u5df2\u7ecf\u5b8c\u5168\u638c\u63e1\u4e86\u8fd9\u4e2a\u77e5\u8bc6\u70b9\u3002"
+                feedback = "优秀！你已经完全掌握了这个知识点。"
             elif mastery_level >= 0.7:
-                feedback = "\u4e0d\u9519\uff01\u4f60\u5bf9\u8fd9\u4e2a\u77e5\u8bc6\u70b9\u7684\u7406\u89e3\u8f83\u597d\uff0c\u53ef\u4ee5\u7ee7\u7eed\u6df1\u5165\u3002"
+                feedback = "不错！你对这个知识点的理解较好，可以继续深入。"
             else:
-                feedback = "\u53ca\u683c\u4e86\uff0c\u4f46\u8fd8\u9700\u8981\u52a0\u5f3a\u7ec3\u4e60\u6765\u5dea\u56fa\u7406\u89e3\u3002"
+                feedback = "及格了，但还需要加强练习来巩固理解。"
         else:
-            feedback = "\u8fd8\u9700\u8981\u518d\u52aa\u529b\u4e00\u4e0b\u3002\u5efa\u8bae\u56de\u987e\u76f8\u5173\u6982\u5ff5\u540e\u518d\u6b21\u5c1d\u8bd5\u3002"
+            feedback = "还需要再努力一下。建议回顾相关概念后再次尝试。"
 
         return QuizResult(
             knowledge_point_id=knowledge_point_id,
@@ -111,17 +295,17 @@ class AssessmentEngine:
 
     def _generate_options(self, question: str, key_concepts: list[str]) -> list[str]:
         return [
-            "\u4e0a\u8ff0\u8bf4\u6cd5\u662f\u6b63\u786e\u7684",
-            "\u4e0a\u8ff0\u8bf4\u6cd5\u662f\u9519\u8bef\u7684",
-            "\u90e8\u5206\u6b63\u786e\uff0c\u4f46\u9700\u8981\u66f4\u591a\u6761\u4ef6",
-            "\u65e0\u6cd5\u786e\u5b9a",
+            "上述说法是正确的",
+            "上述说法是错误的",
+            "部分正确，但需要更多条件",
+            "无法确定",
         ]
 
     def _generate_concept_options(self, concept: str, all_concepts: list[str]) -> list[str]:
         other = [c for c in all_concepts if c != concept]
         return [
-            f"{concept}\u662f\u6838\u5fc3\u6982\u5ff5",
-            f"{other[0] if other else '\u5176\u4ed6\u6982\u5ff5'}\u66f4\u91cd\u8981" if other else "\u8fd9\u4e2a\u6982\u5ff5\u4e0d\u91cd\u8981",
-            f"{concept}\u53ea\u5728\u7279\u5b9a\u6761\u4ef6\u4e0b\u9002\u7528",
-            "\u4ee5\u4e0a\u90fd\u4e0d\u5bf9",
+            f"{concept}是核心概念",
+            f"{other[0] if other else '其他概念'}更重要" if other else "这个概念不重要",
+            f"{concept}只在特定条件下适用",
+            "以上都不对",
         ]

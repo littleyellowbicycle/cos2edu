@@ -4,48 +4,63 @@ const routes = [
   {
     path: '/',
     name: 'Home',
-    component: () => import('@/views/Home.vue')
+    component: () => import('@/views/Home.vue'),
   },
   {
     path: '/characters',
     name: 'Characters',
-    component: () => import('@/views/Characters.vue')
+    component: () => import('@/views/Characters.vue'),
   },
   {
     path: '/materials',
     name: 'Materials',
-    component: () => import('@/views/Materials.vue')
+    component: () => import('@/views/Materials.vue'),
   },
   {
     path: '/chat/:id',
     name: 'Chat',
-    component: () => import('@/views/Chat.vue')
+    component: () => import('@/views/Chat.vue'),
   },
   {
     path: '/conversations',
     name: 'Conversations',
-    component: () => import('@/views/Conversations.vue')
+    component: () => import('@/views/Conversations.vue'),
   },
   {
     path: '/settings',
     name: 'Settings',
-    component: () => import('@/views/Settings.vue')
+    component: () => import('@/views/Settings.vue'),
   },
   {
     path: '/curriculum',
     name: 'Curriculum',
-    component: () => import('@/views/Curriculum.vue')
+    component: () => import('@/views/Curriculum.vue'),
   },
   {
     path: '/timeline',
     name: 'Timeline',
-    component: () => import('@/views/Timeline.vue')
-  }
+    component: () => import('@/views/Timeline.vue'),
+  },
+  {
+    path: '/dashboard',
+    name: 'Dashboard',
+    component: () => import('@/views/Dashboard.vue'),
+  },
+  {
+    path: '/editor',
+    name: 'YamlEditor',
+    component: () => import('@/views/YamlEditor.vue'),
+  },
+  {
+    path: '/characters/create',
+    name: 'CharacterCreator',
+    component: () => import('@/views/CharacterCreator.vue'),
+  },
 ]
 
 const router = createRouter({
   history: createWebHistory(),
-  routes
+  routes,
 })
 
 export default router

@@ -1,5 +1,5 @@
 import hashlib
-import json
+import os
 from typing import Optional
 from pathlib import Path
 
@@ -15,22 +15,99 @@ try:
 except ImportError:
     logger.warning("faiss or numpy not available, RAG will use long-context fallback")
 
+_fastembed_available = False
+_fastembed_model = None
+try:
+    from fastembed import TextEmbedding
+    import fastembed.common.model_management as _mm
+
+    # Monkey-patch snapshot_download to bypass HF SSL cert issues behind proxy
+    _orig_snapshot = _mm.snapshot_download
+    def _patched_snapshot(repo_id, **kwargs):
+        base_cache = kwargs.get("cache_dir", os.path.expanduser("~/.cache/fastembed"))
+        snap_base = os.path.join(
+            base_cache, f"models--{repo_id.replace('/', '--')}", "snapshots"
+        )
+        if os.path.isdir(snap_base):
+            snaps = os.listdir(snap_base)
+            if snaps:
+                return os.path.join(snap_base, snaps[0])
+        return _orig_snapshot(repo_id, **kwargs)
+    _mm.snapshot_download = _patched_snapshot
+
+    # Also patch huggingface_hub functions to avoid SSL errors
+    import huggingface_hub
+    _orig_model_info = huggingface_hub.model_info
+    from dataclasses import dataclass
+    @dataclass
+    class _MockInfo:
+        sha: str = "46fbe35fd4374a00fee7de77dfddaeb6dd6a2c59"
+    huggingface_hub.model_info = lambda *a, **kw: _MockInfo()
+    huggingface_hub.repo_info = lambda *a, **kw: _MockInfo()
+
+    _fastembed_available = True
+    logger.info("fastembed imported and patches applied")
+except Exception as e:
+    logger.warning(f"fastembed not available ({type(e).__name__}: {e}), using hash fallback for embeddings")
+
 
 class RAGService:
-    """Minimal RAG service using FAISS for vector retrieval."""
+    """RAG service with pluggable embedding backends and FAISS retrieval."""
 
-    def __init__(self, embedding_dim: int = 768):
+    EMBEDDING_PROVIDERS = ("fastembed", "openai", "hash")
+
+    def __init__(self, embedding_dim: int = 768, embedding_provider: str = "auto"):
         self.embedding_dim = embedding_dim
         self.index = None
         self.chunks = []
         self._initialized = False
+        self._embed_provider = None
 
-        if _faiss_available:
-            self.index = faiss.IndexFlatL2(embedding_dim)
-            self._initialized = True
-            logger.info(f"RAGService initialized with FAISS (dim={embedding_dim})")
-        else:
+        if not _faiss_available:
             logger.info("RAGService initialized in long-context fallback mode (no FAISS)")
+            return
+
+        self._resolve_provider(embedding_provider)
+        self.index = faiss.IndexFlatL2(self.embedding_dim)
+        self._initialized = True
+        logger.info(
+            f"RAGService initialized (dim={self.embedding_dim}, provider={self._embed_provider})"
+        )
+
+    def _resolve_provider(self, provider: str) -> None:
+        if provider == "auto":
+            if _fastembed_available:
+                self._init_fastembed()
+            else:
+                self._embed_provider = "hash"
+                self.embedding_dim = 256
+        elif provider == "fastembed":
+            self._init_fastembed()
+        elif provider == "openai":
+            self._embed_provider = "openai"
+            self.embedding_dim = 1536
+        else:
+            self._embed_provider = "hash"
+            self.embedding_dim = 256
+
+    def _init_fastembed(self) -> None:
+        global _fastembed_model
+        try:
+            if _fastembed_model is None:
+                model_name = "BAAI/bge-small-zh-v1.5"
+                cache_dir = os.path.join(
+                    Path(__file__).resolve().parent.parent.parent, ".cache", "fastembed"
+                )
+                _fastembed_model = TextEmbedding(
+                    model_name=model_name, cache_dir=cache_dir
+                )
+                logger.info(f"Loaded fastembed model: {model_name} (dim={_fastembed_model.embedding_size})")
+            self._embed_provider = "fastembed"
+            self.embedding_dim = _fastembed_model.embedding_size
+        except Exception as e:
+            logger.warning(f"Failed to load fastembed: {e}, falling back to hash")
+            self._embed_provider = "hash"
+            self.embedding_dim = 256
 
     @property
     def is_ready(self) -> bool:
@@ -49,48 +126,93 @@ class RAGService:
             start += chunk_size - overlap
         return chunks
 
-    def _simple_embed(self, text: str) -> list[float]:
-        """Simple hash-based pseudo-embedding for MVP. Should be replaced with real embeddings."""
+    def _embed(self, text: str) -> list[float]:
+        if self._embed_provider == "fastembed" and _fastembed_model is not None:
+            return list(_fastembed_model.embed(text))[0].tolist()
+        elif self._embed_provider == "openai":
+            return self._embed_openai(text)
+        else:
+            return self._embed_hash(text)
+
+    def _embed_hash(self, text: str) -> list[float]:
         h = hashlib.sha256(text.encode()).digest()
         dim = self.embedding_dim
         vec = []
-        for i in range(dim):
-            byte_idx = (i * 4) % len(h)
-            val = int.from_bytes(h[byte_idx:byte_idx + 4 % len(h)], 'little', signed=True) / (2 ** 31)
-            vec.append(val)
+        idx = 0
+        while len(vec) < dim:
+            h = hashlib.sha256(h + idx.to_bytes(4, "little")).digest()
+            for j in range(0, len(h), 4):
+                if len(vec) < dim:
+                    val = int.from_bytes(h[j:j + 4], "little", signed=True) / (2 ** 31)
+                    vec.append(val)
+            idx += 1
         magnitude = sum(x * x for x in vec) ** 0.5
         if magnitude > 0:
             vec = [x / magnitude for x in vec]
         return vec
+
+    def _embed_openai(self, text: str) -> list[float]:
+        try:
+            import httpx
+            import os
+            api_key = os.environ.get("OPENAI_API_KEY", "")
+            base_url = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
+            if not api_key:
+                return self._embed_hash(text)
+            resp = httpx.post(
+                f"{base_url}/embeddings",
+                headers={"Authorization": f"Bearer {api_key}"},
+                json={"model": "text-embedding-3-small", "input": text},
+                timeout=10.0,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                return data["data"][0]["embedding"]
+        except Exception as e:
+            logger.warning(f"OpenAI embedding failed, falling back to hash: {e}")
+        return self._embed_hash(text)
 
     def index_text(self, text: str, source_id: str = "", chunk_size: int = 500, overlap: int = 100) -> int:
         if not self._initialized or not _faiss_available:
             return 0
 
         chunks = self.chunk_text(text, chunk_size, overlap)
-        vectors = []
+        if not chunks:
+            return 0
+
+        all_vecs = []
         for i, chunk in enumerate(chunks):
-            embedding = self._simple_embed(chunk)
-            vec_np = np.array([embedding], dtype=np.float32)
-            vectors.append(vec_np)
+            try:
+                embedding = self._embed(chunk)
+                vec_np = np.array([embedding], dtype=np.float32)
+                all_vecs.append(vec_np)
+            except Exception as e:
+                logger.warning(f"Embedding failed for chunk {i}: {e}")
+                vec_np = np.array([self._embed_hash(chunk)], dtype=np.float32)
+                all_vecs.append(vec_np)
+
             self.chunks.append({
                 "text": chunk,
                 "source_id": source_id,
                 "chunk_index": i,
             })
 
-        if vectors:
-            all_vecs = np.vstack(vectors)
-            self.index.add(all_vecs)
+        if all_vecs:
+            stacked = np.vstack(all_vecs)
+            self.index.add(stacked)
 
-        logger.info(f"Indexed {len(chunks)} chunks from source '{source_id}'")
+        logger.info(f"Indexed {len(chunks)} chunks from source '{source_id}' (provider={self._embed_provider})")
         return len(chunks)
 
     def search(self, query: str, top_k: int = 5) -> list[dict]:
         if not self.is_ready:
             return []
 
-        query_vec = np.array([self._simple_embed(query)], dtype=np.float32)
+        try:
+            query_vec = np.array([self._embed(query)], dtype=np.float32)
+        except Exception:
+            query_vec = np.array([self._embed_hash(query)], dtype=np.float32)
+
         k = min(top_k, self.index.ntotal)
         if k == 0:
             return []

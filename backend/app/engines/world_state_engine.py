@@ -118,6 +118,15 @@ class WorldStateEngine:
             "progress_percent": round(self._current_day / self._total_days * 100, 1),
         }
 
+    def get_all_scenes(self) -> list[SceneInfo]:
+        return list(self._scenes.values())
+
+    def reload(self, content_dir: str) -> None:
+        self._content_dir = Path(content_dir)
+        self._scenes.clear()
+        self._load_world_settings()
+        logger.info(f"WorldStateEngine reloaded: {len(self._scenes)} scenes")
+
     def reset(self) -> None:
         self._current_day = 1
         self._current_scene = "classroom"
