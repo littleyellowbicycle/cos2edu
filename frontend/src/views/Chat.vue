@@ -524,6 +524,7 @@ async function loadConversation(conv) {
       characterAvatar.value = convData.character.avatar || ''
       characterAvatarType.value = convData.character.avatar_type || 'emoji'
     }
+    messages.value = convData.messages || []
   } catch (e) {
     console.error('Failed to load conversation details:', e)
   }

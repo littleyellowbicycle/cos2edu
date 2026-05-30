@@ -328,36 +328,52 @@ class ChatService:
             system_parts.append(system_prompt)
 
         if conversation.material:
-            material_content = ""
-            if conversation.material.content_type == 'url' and conversation.material.content_url:
-                material_content = f"教材URL: {conversation.material.content_url}\n\n请根据这个URL的内容回答用户的问题。"
-            elif conversation.material.content:
-                material_content = conversation.material.content
-            elif conversation.material.content_url:
-                import os
-                import aiofiles
-                file_path = os.path.join(settings.MATERIALS_DIR, conversation.material.content_url)
-                if os.path.exists(file_path):
-                    async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
-                        material_content = await f.read()
-                    if not material_content:
-                        raise ValueError(
-                            f"教材「{conversation.material.title}」的内容为空，PDF 可能无法提取文字（如扫描版），"
-                            f"请转换为文本格式后重新上传"
-                        )
-                else:
-                    raise ValueError(
-                        f"教材「{conversation.material.title}」的文件未找到（{conversation.material.content_url}），"
-                        f"请重新上传教材文件"
-                    )
-            
-            if not material_content:
-                raise ValueError(f"教材「{conversation.material.title}」没有内容。请检查教材是否已上传文件，或内容是否为空。")
+            material_title = conversation.material.title
 
-            if len(material_content) > 4000:
-                material_content = material_content[:4000] + "\n\n... (内容过长已截断，请询问用户是否需要了解更详细的教材信息)"
-            
-            system_parts.append(f"教材信息: {conversation.material.title}\n\n{material_content}")
+            # Try RAG retrieval first
+            rag_context = ""
+            try:
+                from app.services.rag_service import get_rag_service
+                rag = get_rag_service()
+                if rag.is_ready:
+                    rag_context = rag.get_context(user_message, max_tokens=1500)
+            except Exception:
+                pass
+
+            if rag_context:
+                system_parts.append(f"教材信息: {material_title}\n\n参考资料:\n{rag_context}")
+            else:
+                # Fallback: read raw content
+                material_content = ""
+                if conversation.material.content_type == 'url' and conversation.material.content_url:
+                    material_content = f"教材URL: {conversation.material.content_url}\n\n请根据这个URL的内容回答用户的问题。"
+                elif conversation.material.content:
+                    material_content = conversation.material.content
+                elif conversation.material.content_url:
+                    import os
+                    import aiofiles
+                    file_path = os.path.join(settings.MATERIALS_DIR, conversation.material.content_url)
+                    if os.path.exists(file_path):
+                        async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
+                            material_content = await f.read()
+                        if not material_content:
+                            raise ValueError(
+                                f"教材「{material_title}」的内容为空，PDF 可能无法提取文字（如扫描版），"
+                                f"请转换为文本格式后重新上传"
+                            )
+                    else:
+                        raise ValueError(
+                            f"教材「{material_title}」的文件未找到（{conversation.material.content_url}），"
+                            f"请重新上传教材文件"
+                        )
+
+                if not material_content:
+                    raise ValueError(f"教材「{material_title}」没有内容。请检查教材是否已上传文件，或内容是否为空。")
+
+                if len(material_content) > 4000:
+                    material_content = material_content[:4000] + "\n\n... (内容过长已截断，请询问用户是否需要了解更详细的教材信息)"
+
+                system_parts.append(f"教材信息: {material_title}\n\n{material_content}")
 
         if system_parts:
             messages.append({"role": "system", "content": "\n\n".join(system_parts)})

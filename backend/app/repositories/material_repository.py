@@ -17,3 +17,11 @@ class MaterialRepository(BaseRepository[Material]):
             .limit(limit)
         )
         return result.scalars().all()
+
+    async def get_by_status(self, status: str) -> List[Material]:
+        result = await self.session.execute(
+            select(Material)
+            .filter(Material.status == status)
+            .order_by(Material.updated_at.desc())
+        )
+        return result.scalars().all()

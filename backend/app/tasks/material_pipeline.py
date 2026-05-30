@@ -42,33 +42,46 @@ async def process_material(
     file_path: str,
     uow_factory,
     ws_notify: Optional[Callable] = None,
+    text: Optional[str] = None,
 ) -> None:
-    """Process a material through the full pipeline: parse -> index -> outline -> pending_review"""
+    """Process a material through the full pipeline: parse -> index -> outline -> pending_review
+    
+    If `text` is provided, skips file parsing and uses it directly.
+    """
     task = MaterialTask(material_id=material_id, started_at=datetime.now(timezone.utc))
     _task_registry[material_id] = task
 
     try:
-        # Phase 1: Parse
-        task.status = "parsing"
-        task.progress_message = "正在解析文件..."
-        task.progress = 10
-        await _notify(ws_notify, material_id, task)
+        result: Optional[ParseResult] = None
 
-        result = await parser_registry.parse(file_path)
-
-        if not result.success:
-            task.status = "failed"
-            task.error_code = result.error_code
-            task.error_message = result.error_message
-            task.completed_at = datetime.now(timezone.utc)
-            await _update_material_status(uow_factory, material_id, "failed",
-                                          error_code=result.error_code)
+        if text is not None:
+            # Content already available — skip parsing phase
+            from app.parsers.base import ParseResult
+            result = ParseResult(success=True, text=text)
+            task.progress = 30
+            task.progress_message = "内容已就绪"
+        else:
+            # Phase 1: Parse
+            task.status = "parsing"
+            task.progress_message = "正在解析文件..."
+            task.progress = 10
             await _notify(ws_notify, material_id, task)
-            return
 
-        task.parse_result = result
-        task.progress = 30
-        task.progress_message = "文件解析完成"
+            result = await parser_registry.parse(file_path)
+
+            if not result.success:
+                task.status = "failed"
+                task.error_code = result.error_code
+                task.error_message = result.error_message
+                task.completed_at = datetime.now(timezone.utc)
+                await _update_material_status(uow_factory, material_id, "failed",
+                                              error_code=result.error_code)
+                await _notify(ws_notify, material_id, task)
+                return
+
+            task.parse_result = result
+            task.progress = 30
+            task.progress_message = "文件解析完成"
 
         # Phase 2: Index (store text content)
         task.status = "indexing"
@@ -81,8 +94,8 @@ async def process_material(
             if material:
                 await uow.materials.update(material, {
                     "content": result.text[:500000],
-                    "page_count": result.page_count,
-                    "char_count": result.char_count,
+                    "page_count": getattr(result, 'page_count', None),
+                    "char_count": getattr(result, 'char_count', len(result.text)),
                     "status": "indexed",
                 })
         task.status = "indexed"
