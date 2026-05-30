@@ -1,5 +1,5 @@
-from typing import Optional
-from pydantic import BaseModel, Field, field_validator, ConfigDict
+from typing import Optional, Any
+from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 from datetime import datetime
 
 
@@ -84,7 +84,21 @@ class ModelConfigResponse(BaseModel):
     provider: str
     model_name: str
     base_url: Optional[str] = None
+    has_api_key: bool = Field(default=False, description="是否已配置 API Key")
     is_default: bool
     is_active: bool
     created_at: datetime
     updated_at: datetime
+
+    @model_validator(mode="before")
+    @classmethod
+    def resolve_has_api_key(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            api_key = data.get("api_key")
+        else:
+            api_key = getattr(data, "api_key", None)
+        if isinstance(data, dict):
+            data["has_api_key"] = bool(api_key)
+        else:
+            data.has_api_key = bool(api_key)
+        return data
