@@ -45,9 +45,15 @@
               {{ msg.role === 'user' ? '我' : getAvatarDisplay() }}
             </div>
             <div class="message-content">
-              <div class="message-text" :ref="el => { if (el) messageRefs[msg.timestamp] = el }" v-html="getRenderedContent(msg)"></div>
+              <div class="message-text" :class="{ 'is-streaming': isTyping && index === messages.length - 1 && msg.role === 'assistant' }" :ref="el => { if (el) messageRefs[msg.timestamp] = el }" v-html="getRenderedContent(msg)"></div>
+              <div class="message-footer" v-if="msg.role === 'assistant'">
+                <button class="msg-action-btn" title="复制消息" @click="copyMessage(index, msg.content)">
+                  <span v-if="copiedMsgIdx === index">✓</span>
+                  <span v-else>📋</span>
+                </button>
+              </div>
               <div class="message-time" v-if="msg.timestamp" aria-label="发送时间">
-                {{ formatTime(msg.timestamp) }}
+                {{ formatTime(msg.timestamp) }} · {{ countWords(msg.content) }} 字
               </div>
             </div>
           </div>
@@ -191,6 +197,19 @@ function preprocessMarkdown(text) {
   return text
 }
 
+function copyMessage(idx, content) {
+  navigator.clipboard.writeText(content).then(() => {
+    copiedMsgIdx.value = idx
+    setTimeout(() => { copiedMsgIdx.value = -1 }, 1500)
+  })
+}
+
+function countWords(text) {
+  const clean = text.replace(/<[^>]*>/g, '').trim()
+  if (!clean) return 0
+  return clean.length
+}
+
 async function renderMermaid(element) {
   const mermaidBlocks = element.querySelectorAll('pre.mermaid')
   for (const block of mermaidBlocks) {
@@ -212,6 +231,11 @@ async function renderMermaid(element) {
 function getRenderedContent(msg) {
   if (!msg.content) return ''
   let text = msg.content
+  // 将 <think>...</think> 转为可折叠的思考过程
+  text = text.replace(/<think>([\s\S]*?)<\/think>/gi, (_, thought) => {
+    const preview = thought.trim().slice(0, 60)
+    return `<details class="think-block"><summary>💭 思考过程 · ${preview}${thought.trim().length > 60 ? '…' : ''}</summary><div class="think-content">${marked.parse(preprocessMarkdown(thought.trim()))}</div></details>`
+  })
   text = preprocessMarkdown(text)
   let html = marked.parse(text)
   return html
@@ -232,6 +256,7 @@ const sending = ref(false)
 const isTyping = ref(false)
 const messagesContainer = ref(null)
 const inputTextarea = ref(null)
+const copiedMsgIdx = ref(-1)
 const showSidebar = ref(false)
 const conversationId = ref(route.query.conversationId || null)
 const characterName = ref('')
@@ -928,13 +953,80 @@ function formatDate(dateStr) {
 }
 
 .message-text {
+  line-height: 1.8;
   font-size: 15px;
-  line-height: 1.7;
-  color: var(--color-text);
-  padding: 16px 20px;
-  border-radius: 12px;
-  white-space: pre-wrap;
-  word-break: break-word;
+  color: var(--color-ink);
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.think-block {
+  background: var(--color-bg-warm);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+
+.think-block summary {
+  cursor: pointer;
+  color: var(--color-text-muted);
+  font-weight: 500;
+  user-select: none;
+}
+
+.think-block summary:hover {
+  color: var(--color-ink);
+}
+
+.think-content {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.message-text.is-streaming::after {
+  content: '▍';
+  display: inline;
+  animation: cursor-blink 0.8s step-end infinite;
+  color: var(--color-accent);
+  margin-left: 1px;
+}
+
+@keyframes cursor-blink {
+  50% { opacity: 0; }
+}
+
+.message-footer {
+  display: flex;
+  gap: 4px;
+  margin-top: 8px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.message-content:hover .message-footer {
+  opacity: 1;
+}
+
+.msg-action-btn {
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  transition: all 0.15s;
+}
+
+.msg-action-btn:hover {
+  background: var(--color-bg-warm);
+  color: var(--color-ink);
 }
 
 .message.user .message-text {
