@@ -54,7 +54,8 @@ class ConversationRepository(BaseRepository[Conversation]):
         total = (await self.session.execute(count_stmt)).scalar() or 0
 
         result = await self.session.execute(
-            stmt.order_by(Conversation.updated_at.desc())
+            stmt.options(selectinload(Conversation.messages))
+            .order_by(Conversation.updated_at.desc())
             .offset(skip)
             .limit(limit)
         )

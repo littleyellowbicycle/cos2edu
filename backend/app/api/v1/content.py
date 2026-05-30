@@ -64,41 +64,48 @@ async def search_conversations(
     limit: int = 50,
     offset: int = 0,
 ):
+    from app.core.logging_config import get_logger
+    _log = get_logger(__name__)
     from app.repositories.unit_of_work import UnitOfWork
     from app.services import CharacterService
 
-    async with UnitOfWork() as uow:
-        conversations, total = await uow.conversations.search(
-            keyword=keyword if keyword else None,
-            character_id=character_id,
-            skip=offset,
-            limit=limit,
-        )
+    try:
+        async with UnitOfWork() as uow:
+            conversations, total = await uow.conversations.search(
+                keyword=keyword if keyword else None,
+                character_id=character_id,
+                skip=offset,
+                limit=limit,
+            )
 
-    result = []
-    for conv in conversations:
-        char_name = None
-        char_avatar = None
-        char_avatar_type = None
-        if conv.character_id:
-            char = await CharacterService.get_by_id(conv.character_id)
-            if char:
-                char_name = char.name
-                char_avatar = char.avatar
-                char_avatar_type = char.avatar_type
-        result.append({
-            "id": conv.id,
-            "title": conv.title,
-            "character_id": conv.character_id,
-            "character_name": char_name,
-            "character_avatar": char_avatar,
-            "character_avatar_type": char_avatar_type,
-            "created_at": conv.created_at,
-            "updated_at": conv.updated_at,
-            "message_count": len(conv.messages) if conv.messages else 0,
-        })
+            result = []
+            for conv in conversations:
+                char_name = None
+                char_avatar = None
+                char_avatar_type = None
+                if conv.character_id:
+                    char = await CharacterService.get_by_id(conv.character_id)
+                    if char:
+                        char_name = char.name
+                        char_avatar = char.avatar
+                        char_avatar_type = char.avatar_type
+                result.append({
+                    "id": conv.id,
+                    "title": conv.title,
+                    "character_id": conv.character_id,
+                    "character_name": char_name,
+                    "character_avatar": char_avatar,
+                    "character_avatar_type": char_avatar_type,
+                    "created_at": conv.created_at,
+                    "updated_at": conv.updated_at,
+                    "message_count": len(conv.messages) if conv.messages else 0,
+                })
 
-    return {"total": total, "offset": offset, "limit": limit, "conversations": result}
+        return {"total": total, "offset": offset, "limit": limit, "conversations": result}
+    except Exception as e:
+        _log.error(f"search_conversations error: {type(e).__name__}: {e}", exc_info=True)
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)}")
 
 
 @router.get("/conversations/{conversation_id}/messages/search")
