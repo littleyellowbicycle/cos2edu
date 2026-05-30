@@ -382,6 +382,9 @@ watch(() => form.value.provider, (newProvider) => {
   if (baseUrlPlaceholders[newProvider]) {
     form.value.base_url = baseUrlPlaceholders[newProvider]
   }
+  // 切换服务商后清空 key，避免旧提供商的 key 占位符误导
+  form.value.api_key = ''
+  hasConfiguredKey.value = false
 })
 
 let fetchTimer = null
@@ -417,7 +420,7 @@ async function fetchProviderModels(showMessage = false) {
 
 watch(() => form.value.api_key, () => {
   clearTimeout(fetchTimer)
-  if (form.value.api_key) {
+  if (form.value.api_key && form.value.api_key !== MASKED_KEY_PLACEHOLDER) {
     fetchTimer = setTimeout(() => fetchProviderModels(), 500)
   }
 })
@@ -436,9 +439,7 @@ onMounted(async () => {
         base_url: config.base_url || '',
         group_id: config.group_id || ''
       }
-      if (config.has_api_key) {
-        fetchProviderModels()
-      }
+      // 已有 key 但前端拿不到原文，无法从 API 刷新模型列表，使用本地默认列表
     }
   } catch (e) {
     console.error(e)
