@@ -4,6 +4,72 @@
       <h1>&#x1F4DA; 课程体系</h1>
       <p class="subtitle">AI 机器学习入门 · 学习进度 {{ progressPercent }}%</p>
       <button class="btn-sync" @click="syncState">&#x1F504; 同步</button>
+      <button class="btn-generate" @click="openGenerateDialog">&#x2728; 根据教材生成</button>
+    </div>
+
+    <div v-if="showGenerateDialog" class="generate-overlay" @click.self="closeGenerateDialog">
+      <div class="generate-dialog">
+        <div class="dialog-header">
+          <h3>从教材生成课程大纲</h3>
+          <button class="dialog-close" @click="closeGenerateDialog">&times;</button>
+        </div>
+
+        <div v-if="!generatingOutline && !generatedSyllabus" class="dialog-body">
+          <p class="dialog-hint">选择一本已上传的教材，AI 将自动分析内容并生成结构化学习大纲。</p>
+          <div v-if="generatableMaterials.length === 0" class="empty-materials">
+            <p>暂无可以生成大纲的教材。请先在「教材管理」中上传一份教材。</p>
+          </div>
+          <div v-else class="material-list">
+            <div
+              v-for="m in generatableMaterials"
+              :key="m.id"
+              class="material-option"
+              :class="{ selected: selectedMaterialId === m.id }"
+              @click="selectedMaterialId = m.id"
+            >
+              <div class="material-option-info">
+                <span class="material-option-title">{{ m.title }}</span>
+                <span class="material-option-meta">{{ m.char_count }} 字 · {{ m.status }}</span>
+              </div>
+              <span class="material-check">{{ selectedMaterialId === m.id ? '&#x2713;' : '' }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="generatingOutline" class="dialog-body generating">
+          <div class="generating-spinner"></div>
+          <p>AI 正在分析教材内容并生成大纲...</p>
+          <p class="generating-hint">这可能需要 30-60 秒</p>
+        </div>
+
+        <div v-if="generatedSyllabus" class="dialog-body preview">
+          <h4 class="preview-title">{{ generatedSyllabus.name || '生成的大纲' }}</h4>
+          <p class="preview-days">计划 {{ generatedSyllabus.total_days || 60 }} 天</p>
+          <div v-for="phase in (generatedSyllabus.phases || [])" :key="phase.name" class="preview-phase">
+            <h5>{{ phase.name }} <span class="phase-range-preview">(第{{ phase.days[0] }}-{{ phase.days[1] }}天)</span></h5>
+            <div class="preview-modules">
+              <div v-for="mod in (generatedSyllabus.modules || [])" :key="mod.id" class="preview-module">
+                <span class="mod-name">{{ mod.name }}</span>
+                <span class="mod-hours">{{ mod.estimated_hours }}h</span>
+                <div class="mod-points">
+                  <span v-for="kp in (mod.knowledge_points || [])" :key="kp.id" class="point-tag">{{ kp.name }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="!generatingOutline" class="dialog-footer">
+          <button v-if="!generatedSyllabus" class="btn-cancel-dialog" @click="closeGenerateDialog">取消</button>
+          <button v-if="!generatedSyllabus" class="btn-generate-start" :disabled="!selectedMaterialId" @click="startGeneration">
+            开始生成
+          </button>
+          <template v-if="generatedSyllabus">
+            <button class="btn-cancel-dialog" @click="rejectGenerated">拒绝</button>
+            <button class="btn-confirm" @click="confirmGenerated">确认大纲</button>
+          </template>
+        </div>
+      </div>
     </div>
 
     <div v-if="loading" class="loading">
@@ -117,7 +183,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useNarrativeStore } from '@/stores/narrative'
 import { useWebSocket } from '@/composables/useWebSocket'
-import api from '@/api'
+import api, { apiClient } from '@/api'
 
 const narrative = useNarrativeStore()
 const ws = useWebSocket()
@@ -127,6 +193,12 @@ const error = ref(null)
 const syllabus = ref(null)
 const activePhases = ref([])
 const modules = ref([])
+
+const showGenerateDialog = ref(false)
+const generatableMaterials = ref([])
+const selectedMaterialId = ref(null)
+const generatingOutline = ref(false)
+const generatedSyllabus = ref(null)
 
 const masteredCount = computed(() => narrative.progress.masteredPoints?.length || 0)
 const totalPoints = computed(() => narrative.progress.totalPoints || 0)
@@ -209,6 +281,76 @@ function triggerAssessment(point) {
   ws.generateAssessment(point.id, '')
 }
 
+async function openGenerateDialog() {
+  showGenerateDialog.value = true
+  selectedMaterialId.value = null
+  generatedSyllabus.value = null
+  try {
+    const all = await api.materials.getAll()
+    const valid = all.filter(m => m.content && m.content.length > 100)
+    generatableMaterials.value = valid.map(m => ({
+      id: m.id,
+      title: m.title,
+      status: m.status,
+      char_count: m.char_count || (m.content ? m.content.length : 0),
+    }))
+  } catch (e) {
+    console.error('generatable error:', e)
+    generatableMaterials.value = []
+  }
+}
+
+function closeGenerateDialog() {
+  showGenerateDialog.value = false
+  generatedSyllabus.value = null
+  generatingOutline.value = false
+}
+
+async function startGeneration() {
+  if (!selectedMaterialId.value) return
+  generatingOutline.value = true
+  const url = `/api/v1/curriculum/materials/${selectedMaterialId.value}/generate-outline`
+  console.log('Starting generation, URL:', url)
+  console.log('Material ID value:', selectedMaterialId.value)
+  try {
+    const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+    console.log('Response status:', res.status, res.statusText)
+    const data = await res.json()
+    console.log('Response data:', data)
+    if (!res.ok) {
+      throw new Error(data.detail || `HTTP ${res.status} ${res.statusText}`)
+    }
+    generatedSyllabus.value = data.syllabus
+  } catch (e) {
+    console.error('Generation error:', e)
+    error.value = '生成大纲失败: ' + e.message
+    closeGenerateDialog()
+  } finally {
+    generatingOutline.value = false
+  }
+}
+
+async function confirmGenerated() {
+  try {
+    await apiClient.post(`/curriculum/materials/${selectedMaterialId.value}/confirm-syllabus`)
+    showGenerateDialog.value = false
+    generatedSyllabus.value = null
+    await loadCurriculum()
+  } catch (e) {
+    error.value = '确认大纲失败: ' + (e.response?.data?.detail || e.message || '未知错误')
+  }
+}
+
+async function rejectGenerated() {
+  try {
+    await apiClient.post(`/curriculum/materials/${selectedMaterialId.value}/reject-syllabus`)
+    showGenerateDialog.value = false
+    generatedSyllabus.value = null
+  } catch (e) {
+    error.value = '操作失败: ' + (e.response?.data?.detail || e.message || '未知错误')
+  }
+}
+
 function syncState() {
   ws.requestStateSync()
 }
@@ -217,8 +359,8 @@ async function loadCurriculum() {
   loading.value = true
   error.value = null
   try {
-    syllabus.value = await api.get('/crud/curriculum/syllabus')
-    modules.value = await api.get('/crud/curriculum/modules')
+    syllabus.value = await api.curriculum.getSyllabus()
+    modules.value = await api.curriculum.getModules()
     activePhases.value = phases.value.map(p => p.name)
   } catch (e) {
     error.value = '加载课程失败: ' + (e.message || '未知错误')
@@ -276,6 +418,269 @@ onMounted(() => {
 
 .btn-sync:hover {
   border-color: var(--color-accent);
+}
+
+.btn-generate {
+  margin-left: 8px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  background: linear-gradient(135deg, #7c4dff, #b388ff);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-generate:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(124, 77, 255, 0.3);
+}
+
+.generate-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.generate-dialog {
+  background: var(--color-surface);
+  border-radius: 12px;
+  width: 600px;
+  max-width: 90vw;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+.dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.dialog-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.dialog-close {
+  background: none;
+  border: none;
+  font-size: 22px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.dialog-body {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.dialog-hint {
+  color: var(--color-text-muted);
+  font-size: 13px;
+  margin: 0 0 16px;
+}
+
+.empty-materials {
+  text-align: center;
+  padding: 32px;
+  color: var(--color-text-muted);
+}
+
+.material-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.material-option {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.material-option:hover {
+  border-color: var(--color-accent);
+}
+
+.material-option.selected {
+  border-color: #7c4dff;
+  background: rgba(124, 77, 255, 0.06);
+}
+
+.material-option-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.material-option-title {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.material-option-meta {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.material-check {
+  color: #7c4dff;
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.dialog-body.generating {
+  text-align: center;
+  padding: 48px 20px;
+}
+
+.generating-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid var(--color-border);
+  border-top-color: #7c4dff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 16px;
+}
+
+.generating-hint {
+  color: var(--color-text-muted);
+  font-size: 13px;
+  margin-top: 8px;
+}
+
+.preview-title {
+  margin: 0 0 4px;
+  font-size: 18px;
+}
+
+.preview-days {
+  color: var(--color-text-muted);
+  font-size: 13px;
+  margin: 0 0 16px;
+}
+
+.preview-phase {
+  margin-bottom: 16px;
+}
+
+.preview-phase h5 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: var(--color-ink);
+}
+
+.phase-range-preview {
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.preview-modules {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.preview-module {
+  padding: 10px 12px;
+  background: var(--color-bg);
+  border-radius: 6px;
+}
+
+.mod-name {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.mod-hours {
+  float: right;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.mod-points {
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.point-tag {
+  font-size: 11px;
+  padding: 2px 8px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  color: var(--color-text-muted);
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--color-border);
+}
+
+.btn-cancel-dialog {
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.btn-generate-start {
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  background: #7c4dff;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.btn-generate-start:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-confirm {
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  background: #4caf50;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
 }
 
 .progress-bar-container {

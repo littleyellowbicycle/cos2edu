@@ -328,6 +328,9 @@ function getAvatarDisplay(item) {
   if (item.avatar_type === 'emoji' && item.avatar) {
     return item.avatar
   }
+  if (item.avatar_type === 'image') {
+    return ''
+  }
   return item.name ? item.name.charAt(0) : '?'
 }
 
@@ -340,7 +343,7 @@ function getAvatarStyle(item) {
       if (item.avatar.startsWith('/')) {
         return { backgroundImage: `url(${item.avatar})`, backgroundSize: 'cover', backgroundPosition: 'center' }
       }
-      return { backgroundImage: `url(/api/v1/avatars/${item.avatar})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+      return { backgroundImage: `url(/api/v1/crud/avatars/${item.avatar})`, backgroundSize: 'cover', backgroundPosition: 'center' }
     }
   }
   return {}

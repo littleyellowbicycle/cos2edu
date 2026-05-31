@@ -34,8 +34,9 @@ logger = get_logger(__name__)
 class TestConfigRequest(BaseModel):
     provider: str
     model: str
-    api_key: str
+    api_key: str = ""
     base_url: Optional[str] = None
+    config_id: Optional[int] = None
 
 
 class ModelOption(BaseModel):
@@ -187,7 +188,7 @@ async def delete_character(request: Request, character_id: int):
     return {"message": "删除成功"}
 
 
-@router.get("/crud/avatars/{filename}")
+@router.get("/avatars/{filename}")
 async def get_avatar(filename: str):
     avatar_path = os.path.join(settings.AVATARS_DIR, filename)
     if not os.path.exists(avatar_path):
@@ -773,18 +774,25 @@ async def health_check(request: Request):
 @limiter.limit("10/minute")
 async def test_ai_connection(request: Request, config: TestConfigRequest):
     from app.services.chat_service import LLMProvider
-    
+    from app.services.crud_services import ModelConfigService
+
     try:
+        api_key = config.api_key
+        if not api_key and config.config_id:
+            saved = await ModelConfigService.get_by_id(config.config_id)
+            if saved and saved.api_key:
+                api_key = saved.api_key
+
         provider = LLMProvider({
             "provider": config.provider,
             "model_name": config.model,
-            "api_key": config.api_key,
+            "api_key": api_key,
             "base_url": config.base_url
         })
-        
+
         test_messages = [{"role": "user", "content": "Hi"}]
         response = await provider.chat(test_messages)
-        
+
         return {"success": True, "response": response[:100]}
     except Exception as e:
         return {"success": False, "error": str(e)}

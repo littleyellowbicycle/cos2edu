@@ -58,32 +58,17 @@ class NarrativeEngine:
                 if not conversation:
                     raise ValueError(f"Conversation {conversation_id} not found")
 
-                mastered = await self._get_mastered_points(uow)
-                point_data = self.teaching.get_next_teaching_point(mastered)
-
-                scene = self.world.get_current_scene()
-
-                emotion_summary = "平静、专注"
-                if self.emotion:
-                    mood = self.emotion.get_mood(character_id)
-                    emotion_summary = self._mood_to_description(mood)
-
-                rag_context = ""
-                if self.rag.is_ready:
-                    rag_context = self.rag.get_context(user_message, max_tokens=1500)
-                if not rag_context and conversation.material and conversation.material.content:
-                    rag_context = conversation.material.content[:2000]
-
-                history_messages = []
-                history = await uow.messages.get_by_conversation(conversation_id)
-                for msg in history[-20:]:
-                    history_messages.append({"role": msg.role, "content": msg.content})
+                is_structured = (
+                    conversation.material is not None
+                    and conversation.material.status == "ready"
+                )
 
                 self._message_counts[conversation_id] = self._message_counts.get(conversation_id, 0) + 1
 
-                if point_data:
-                    # Phase 2.0: Check if assessment should be triggered
-                    if self.assessment and self.assessment.should_trigger_assessment(
+                if is_structured:
+                    mastered = await self._get_mastered_points(uow)
+                    point_data = self.teaching.get_next_teaching_point(mastered)
+                    if point_data and self.assessment and self.assessment.should_trigger_assessment(
                         point_id=point_data["point_id"],
                         mastered_points=mastered,
                         message_count=self._message_counts[conversation_id],
@@ -96,22 +81,6 @@ class NarrativeEngine:
                                 "message": f"很好！我们已经讨论了「{point_data['name']}」的核心概念。让我们来做个小测验，检验一下你的理解。",
                             },
                         }, ensure_ascii=False)
-                    else:
-                        messages = self.teaching.build_teaching_prompt(
-                            point_data=point_data,
-                            character_id=character_id,
-                            scene_id=scene.id,
-                            allowed_actions=scene.allowed_actions,
-                            emotion_summary=emotion_summary,
-                            history=history_messages,
-                            rag_context=rag_context,
-                        )
-                else:
-                    messages = self._build_default_prompt(
-                        character_id=character_id,
-                        history=history_messages,
-                        rag_context=rag_context,
-                    )
 
                 full_response = ""
                 try:

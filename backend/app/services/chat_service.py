@@ -327,7 +327,7 @@ class ChatService:
                 system_prompt += f" 背景: {conversation.character.background}"
             system_parts.append(system_prompt)
 
-        if conversation.material:
+        if conversation.material and conversation.material.status == "ready":
             material_title = conversation.material.title
 
             # Try RAG retrieval first

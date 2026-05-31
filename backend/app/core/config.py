@@ -179,6 +179,13 @@ if not settings.BACKGROUNDS_DIR:
 if not settings.DATABASE_URL:
     settings.DATABASE_URL = f"sqlite+aiosqlite:///{os.path.join(_data_dir, 'app.db')}"
 
+# Resolve any relative paths from .env to absolute (relative to CWD)
+_path_attrs = ['DATA_DIR', 'CHARACTERS_DIR', 'MATERIALS_DIR', 'CONVERSATIONS_DIR', 'UPLOADS_DIR', 'AVATARS_DIR', 'BACKGROUNDS_DIR']
+for attr in _path_attrs:
+    val = getattr(settings, attr)
+    if val and not os.path.isabs(val):
+        setattr(settings, attr, os.path.abspath(val))
+
 for dir_path in [
     settings.DATA_DIR,
     settings.CHARACTERS_DIR,

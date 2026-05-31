@@ -345,12 +345,18 @@ function getAvatarDisplay() {
   if (characterAvatarType.value === 'emoji' && characterAvatar.value) {
     return characterAvatar.value
   }
+  if (characterAvatarType.value === 'image') {
+    return ''
+  }
   return characterName.value ? characterName.value.charAt(0) : '?'
 }
 
 function getAvatarStyle() {
   if (characterAvatarType.value === 'image' && characterAvatar.value) {
-    return { backgroundImage: `url(${characterAvatar.value})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+    const avatarUrl = characterAvatar.value.startsWith('/') || characterAvatar.value.startsWith('data:') || characterAvatar.value.startsWith('http')
+      ? characterAvatar.value
+      : `/api/v1/crud/avatars/${characterAvatar.value}`
+    return { backgroundImage: `url(${avatarUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }
   }
   return {}
 }

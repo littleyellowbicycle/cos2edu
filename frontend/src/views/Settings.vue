@@ -501,21 +501,33 @@ async function handleSubmit() {
 async function testConnection() {
   testing.value = true
   testResult.value = null
-  
+
+  const keyToTest = form.value.api_key === MASKED_KEY_PLACEHOLDER ? '' : form.value.api_key
+  if (!keyToTest && !currentConfig.value.id) {
+    testResult.value = { type: 'error', message: '请先输入 API Key 再测试连接（已保存的 Key 不会被回传到前端）' }
+    testing.value = false
+    return
+  }
+
+  const body = {
+    provider: form.value.provider,
+    model: form.value.model_name,
+    api_key: keyToTest,
+    base_url: form.value.base_url
+  }
+  if (!keyToTest && currentConfig.value.id) {
+    body.config_id = currentConfig.value.id
+  }
+
   try {
     const response = await fetch('/api/v1/crud/ai/test', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        provider: form.value.provider,
-        model: form.value.model_name,
-        api_key: form.value.api_key,
-        base_url: form.value.base_url
-      })
+      body: JSON.stringify(body)
     })
-    
+
     const data = await response.json()
-    
+
     if (response.ok && data.success) {
       testResult.value = { type: 'success', message: '连接成功！AI 已准备好。' }
     } else {

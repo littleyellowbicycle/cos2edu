@@ -50,6 +50,8 @@ async def get_material_status(request: Request, material_id: int):
         if not material:
             raise HTTPException(status_code=404, detail="教材不存在")
 
+        syllabus = await uow.syllabuses.get_by_material_id(material_id)
+
     task = get_task_status(material_id)
 
     status = material.status if material.status else "parsing"
@@ -66,6 +68,7 @@ async def get_material_status(request: Request, material_id: int):
         progress_message=task.progress_message if task else "",
         error_code=material.error_code,
         capabilities=capabilities,
+        syllabus_preview=syllabus.content if syllabus and syllabus.content else None,
     )
 
     if task and task.error_message:
@@ -147,6 +150,72 @@ async def edit_syllabus(request: Request, material_id: int, data: SyllabusEditRe
     return {"status": "ok", "message": "大纲已更新，请重新确认"}
 
 
+@router.get("/materials/generatable")
+@limiter.limit("30/minute")
+async def list_generatable_materials(request: Request):
+    """List materials that have content and can generate a syllabus"""
+    async with UnitOfWork() as uow:
+        all_materials = await uow.materials.get_all()
+        results = []
+        for m in all_materials:
+            if m.content and len(m.content.strip()) > 100:
+                results.append({
+                    "id": m.id,
+                    "title": m.title,
+                    "status": m.status,
+                    "char_count": m.char_count or len(m.content),
+                })
+    return results
+
+
+@router.api_route("/materials/{material_id}/generate-outline", methods=["GET", "POST"])
+@limiter.limit("5/minute")
+async def generate_outline(request: Request, material_id: int):
+    """Trigger LLM outline generation for a material"""
+    from app.services.chat_service import LLMProvider
+    from app.repositories.unit_of_work import UnitOfWork
+    from app.tasks.material_pipeline import _generate_outline
+
+    async with UnitOfWork() as uow:
+        material = await uow.materials.get_by_id(material_id)
+        if not material:
+            raise HTTPException(status_code=404, detail="教材不存在")
+        if not material.content or len(material.content.strip()) < 100:
+            raise HTTPException(status_code=400, detail="教材内容不足，无法生成大纲")
+        text_content = material.content
+
+    outline = await _generate_outline(text_content, UnitOfWork)
+    if not outline:
+        raise HTTPException(status_code=500, detail="大纲生成失败，请检查LLM配置")
+
+    async with UnitOfWork() as uow:
+        from models.syllabus import Syllabus
+        existing = await uow.syllabuses.get_by_material_id(material_id)
+        if existing:
+            await uow.syllabuses.update(existing, {
+                "name": outline.get("name", "自动生成大纲"),
+                "total_days": outline.get("total_days", 60),
+                "content": outline,
+                "generated_by": "llm",
+                "review_status": "pending",
+            })
+        else:
+            await uow.syllabuses.create({
+                "material_id": material_id,
+                "name": outline.get("name", "自动生成大纲"),
+                "total_days": outline.get("total_days", 60),
+                "content": outline,
+                "generated_by": "llm",
+                "review_status": "pending",
+            })
+        await uow.materials.update(material, {
+            "status": "pending_review",
+            "review_status": "pending",
+        })
+
+    return {"status": "ok", "syllabus": outline}
+
+
 @router.get("/syllabus")
 @limiter.limit("60/minute")
 async def get_curriculum_syllabus(request: Request):
@@ -159,7 +228,7 @@ async def get_curriculum_syllabus(request: Request):
     if getattr(sys, 'frozen', False):
         base_dir = os.path.dirname(sys.executable)
     else:
-        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
     syllabus_file = os.path.join(base_dir, "content", "syllabus.yaml")
 
@@ -184,7 +253,7 @@ async def get_curriculum_modules(request: Request):
     if getattr(sys, 'frozen', False):
         base_dir = os.path.dirname(sys.executable)
     else:
-        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
     modules_dir = os.path.join(base_dir, "content", "modules")
     modules = []

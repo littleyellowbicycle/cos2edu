@@ -133,6 +133,7 @@ async def process_material(
 
                 from models.syllabus import Syllabus
                 syllabus_data = {
+                    "material_id": material_id,
                     "name": outline.get("name", "自动生成大纲"),
                     "total_days": outline.get("total_days", 60),
                     "content": outline,

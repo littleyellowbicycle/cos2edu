@@ -26,6 +26,8 @@ apiClient.interceptors.response.use(
   }
 )
 
+export { apiClient }
+
 export default {
   characters: {
     getAll: () => apiClient.get('/crud/characters'),
@@ -91,5 +93,9 @@ export default {
     createCharacterFromTemplate: (data) => apiClient.post('/content/characters/create', data),
     getCharacterTemplates: () => apiClient.get('/content/characters/templates'),
     reloadContent: () => apiClient.post('/content/reload'),
+  },
+  curriculum: {
+    getSyllabus: () => apiClient.get('/curriculum/syllabus'),
+    getModules: () => apiClient.get('/curriculum/modules'),
   }
 }
