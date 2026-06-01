@@ -2,9 +2,34 @@
   <div class="curriculum-page">
     <div class="curriculum-header">
       <h1>&#x1F4DA; 课程体系</h1>
-      <p class="subtitle">AI 机器学习入门 · 学习进度 {{ progressPercent }}%</p>
+      <p class="subtitle">{{ currentSyllabusName }} · 学习进度 {{ progressPercent }}%</p>
       <button class="btn-sync" @click="syncState">&#x1F504; 同步</button>
       <button class="btn-generate" @click="openGenerateDialog">&#x2728; 根据教材生成</button>
+    </div>
+
+    <div class="syllabus-tabs" v-if="syllabusList.length > 0">
+      <div
+        class="syllabus-tab"
+        :class="{ active: !activeMaterialId }"
+        @click="switchSyllabus(null)"
+      >
+        &#x1F4C4; 默认大纲
+      </div>
+      <div
+        v-for="s in syllabusList"
+        :key="s.material_id"
+        class="syllabus-tab"
+        :class="{ active: activeMaterialId === s.material_id }"
+        @click="switchSyllabus(s.material_id)"
+      >
+        &#x1F4D6; {{ s.material_title || s.name }}
+        <span class="tab-status" :class="s.review_status">{{ statusLabels[s.review_status] || s.review_status }}</span>
+      </div>
+    </div>
+
+    <div class="view-toggle" v-if="!loading && !error">
+      <button class="toggle-btn" :class="{ active: viewMode === 'list' }" @click="viewMode = 'list'">&#x1F4CB; 列表</button>
+      <button class="toggle-btn" :class="{ active: viewMode === 'mindmap' }" @click="viewMode = 'mindmap'">&#x1F9E0; 脑图</button>
     </div>
 
     <div v-if="showGenerateDialog" class="generate-overlay" @click.self="closeGenerateDialog">
@@ -24,14 +49,23 @@
               v-for="m in generatableMaterials"
               :key="m.id"
               class="material-option"
-              :class="{ selected: selectedMaterialId === m.id }"
+              :class="{
+                selected: selectedMaterialId === m.id,
+                'has-syllabus': m.has_syllabus,
+              }"
               @click="selectedMaterialId = m.id"
             >
               <div class="material-option-info">
                 <span class="material-option-title">{{ m.title }}</span>
-                <span class="material-option-meta">{{ m.char_count }} 字 · {{ m.status }}</span>
+                <span class="material-option-meta">
+                  {{ m.char_count }} 字
+                  <template v-if="m.has_syllabus">
+                    · <span class="has-syllabus-badge">{{ syllabusStatusText(m.syllabus_status) }}</span>
+                  </template>
+                </span>
               </div>
-              <span class="material-check">{{ selectedMaterialId === m.id ? '&#x2713;' : '' }}</span>
+              <span v-if="m.has_syllabus" class="material-badge">&#x2705; 已有大纲</span>
+              <span v-else class="material-check">{{ selectedMaterialId === m.id ? '&#x2713;' : '' }}</span>
             </div>
           </div>
         </div>
@@ -46,7 +80,7 @@
           <h4 class="preview-title">{{ generatedSyllabus.name || '生成的大纲' }}</h4>
           <p class="preview-days">计划 {{ generatedSyllabus.total_days || 60 }} 天</p>
           <div v-for="phase in (generatedSyllabus.phases || [])" :key="phase.name" class="preview-phase">
-            <h5>{{ phase.name }} <span class="phase-range-preview">(第{{ phase.days[0] }}-{{ phase.days[1] }}天)</span></h5>
+            <h5>{{ phase.name }} <span class="phase-range-preview" v-if="phase.days">(第{{ phase.days[0] }}-{{ phase.days[1] }}天)</span></h5>
             <div class="preview-modules">
               <div v-for="mod in (generatedSyllabus.modules || [])" :key="mod.id" class="preview-module">
                 <span class="mod-name">{{ mod.name }}</span>
@@ -62,7 +96,7 @@
         <div v-if="!generatingOutline" class="dialog-footer">
           <button v-if="!generatedSyllabus" class="btn-cancel-dialog" @click="closeGenerateDialog">取消</button>
           <button v-if="!generatedSyllabus" class="btn-generate-start" :disabled="!selectedMaterialId" @click="startGeneration">
-            开始生成
+            {{ selectedMaterialId && generatableMaterials.find(m => m.id === selectedMaterialId)?.has_syllabus ? '重新生成' : '开始生成' }}
           </button>
           <template v-if="generatedSyllabus">
             <button class="btn-cancel-dialog" @click="rejectGenerated">拒绝</button>
@@ -82,7 +116,7 @@
       <button class="btn-retry" @click="loadCurriculum">重试</button>
     </div>
 
-    <div v-else>
+    <div v-else-if="viewMode === 'list'">
       <div class="progress-bar-container">
         <div class="progress-track">
           <div class="progress-fill" :style="{ width: progressPercent + '%' }"></div>
@@ -96,7 +130,7 @@
       <div v-for="phase in phases" :key="phase.name" class="phase-section">
         <div class="phase-header" @click="togglePhase(phase.name)">
           <h2>{{ phase.name }}</h2>
-          <span class="phase-range">第{{ phase.days[0] }}-{{ phase.days[1] }}天</span>
+          <span class="phase-range">{{ phase.days ? `第${phase.days[0]}-${phase.days[1]}天` : '' }}</span>
           <span class="toggle-icon">{{ activePhases.includes(phase.name) ? '&#x25B2;' : '&#x25BC;' }}</span>
         </div>
 
@@ -176,14 +210,21 @@
         </div>
       </div>
     </div>
+
+    <div v-else-if="viewMode === 'mindmap'" class="mindmap-container">
+      <div ref="mindmapEl" class="mindmap-render"></div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useNarrativeStore } from '@/stores/narrative'
 import { useWebSocket } from '@/composables/useWebSocket'
 import api, { apiClient } from '@/api'
+import mermaid from 'mermaid'
+
+mermaid.initialize({ startOnLoad: false, theme: 'default' })
 
 const narrative = useNarrativeStore()
 const ws = useWebSocket()
@@ -193,12 +234,31 @@ const error = ref(null)
 const syllabus = ref(null)
 const activePhases = ref([])
 const modules = ref([])
+const viewMode = ref('list')
+const mindmapEl = ref(null)
+
+const activeMaterialId = ref(null)
+const syllabusList = ref([])
 
 const showGenerateDialog = ref(false)
 const generatableMaterials = ref([])
 const selectedMaterialId = ref(null)
 const generatingOutline = ref(false)
 const generatedSyllabus = ref(null)
+
+const statusLabels = {
+  pending: '待审核',
+  approved: '已确认',
+  rejected: '已拒绝',
+}
+
+const currentSyllabusName = computed(() => {
+  if (!activeMaterialId.value) {
+    return syllabus.value?.course?.name || syllabus.value?.name || '课程大纲'
+  }
+  const found = syllabusList.value.find(s => s.material_id === activeMaterialId.value)
+  return found?.material_title || found?.name || '课程大纲'
+})
 
 const masteredCount = computed(() => narrative.progress.masteredPoints?.length || 0)
 const totalPoints = computed(() => narrative.progress.totalPoints || 0)
@@ -209,7 +269,8 @@ const progressPercent = computed(() => {
 
 const phases = computed(() => {
   if (!syllabus.value) return []
-  return (syllabus.value.course?.phases || []).map(p => ({
+  const rawPhases = syllabus.value.course?.phases || syllabus.value.phases || []
+  return rawPhases.filter(p => p && p.name).map(p => ({
     ...p,
     modulesData: p.modules?.map(mid => modulesMap.value[mid]).filter(Boolean) || []
   }))
@@ -217,9 +278,17 @@ const phases = computed(() => {
 
 const modulesMap = computed(() => {
   const map = {}
-  modules.value.forEach(m => { map[m.id] = m })
-  return map
+  const nameMap = {}
+  modules.value.forEach(m => {
+    map[m.id] = m
+    if (m.name) nameMap[m.name] = m
+  })
+  return { ...map, ...nameMap }
 })
+
+function syllabusStatusText(status) {
+  return statusLabels[status] || status || ''
+}
 
 function togglePhase(name) {
   const idx = activePhases.value.indexOf(name)
@@ -281,19 +350,25 @@ function triggerAssessment(point) {
   ws.generateAssessment(point.id, '')
 }
 
+async function switchSyllabus(materialId) {
+  activeMaterialId.value = materialId
+  await loadCurriculum()
+}
+
+async function loadSyllabusList() {
+  try {
+    syllabusList.value = await api.curriculum.listSyllabuses()
+  } catch (e) {
+    console.error('Failed to load syllabus list:', e)
+  }
+}
+
 async function openGenerateDialog() {
   showGenerateDialog.value = true
   selectedMaterialId.value = null
   generatedSyllabus.value = null
   try {
-    const all = await api.materials.getAll()
-    const valid = all.filter(m => m.content && m.content.length > 100)
-    generatableMaterials.value = valid.map(m => ({
-      id: m.id,
-      title: m.title,
-      status: m.status,
-      char_count: m.char_count || (m.content ? m.content.length : 0),
-    }))
+    generatableMaterials.value = await api.curriculum.listGeneratableMaterials()
   } catch (e) {
     console.error('generatable error:', e)
     generatableMaterials.value = []
@@ -310,13 +385,9 @@ async function startGeneration() {
   if (!selectedMaterialId.value) return
   generatingOutline.value = true
   const url = `/api/v1/curriculum/materials/${selectedMaterialId.value}/generate-outline`
-  console.log('Starting generation, URL:', url)
-  console.log('Material ID value:', selectedMaterialId.value)
   try {
     const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
-    console.log('Response status:', res.status, res.statusText)
     const data = await res.json()
-    console.log('Response data:', data)
     if (!res.ok) {
       throw new Error(data.detail || `HTTP ${res.status} ${res.statusText}`)
     }
@@ -335,6 +406,8 @@ async function confirmGenerated() {
     await apiClient.post(`/curriculum/materials/${selectedMaterialId.value}/confirm-syllabus`)
     showGenerateDialog.value = false
     generatedSyllabus.value = null
+    activeMaterialId.value = selectedMaterialId.value
+    await loadSyllabusList()
     await loadCurriculum()
   } catch (e) {
     error.value = '确认大纲失败: ' + (e.response?.data?.detail || e.message || '未知错误')
@@ -359,8 +432,8 @@ async function loadCurriculum() {
   loading.value = true
   error.value = null
   try {
-    syllabus.value = await api.curriculum.getSyllabus()
-    modules.value = await api.curriculum.getModules()
+    syllabus.value = await api.curriculum.getSyllabus(activeMaterialId.value)
+    modules.value = await api.curriculum.getModules(activeMaterialId.value)
     activePhases.value = phases.value.map(p => p.name)
   } catch (e) {
     error.value = '加载课程失败: ' + (e.message || '未知错误')
@@ -369,8 +442,83 @@ async function loadCurriculum() {
   }
 }
 
-onMounted(() => {
-  loadCurriculum()
+function buildMermaidCode() {
+  if (!syllabus.value && modules.value.length === 0) return 'graph LR\n  A[暂无大纲数据]'
+
+  const lines = ['graph LR']
+  const syllabusName = syllabus.value?.course?.name || syllabus.value?.name || '课程大纲'
+  lines.push(`  root["${syllabusName}"]`)
+
+  const rawPhases = syllabus.value?.course?.phases || syllabus.value?.phases || []
+  const phaseIds = []
+  rawPhases.filter(p => p && p.name).forEach((phase, i) => {
+    const pid = `p${i}`
+    const label = phase.days ? `${phase.name}<br/>第${phase.days[0]}-${phase.days[1]}天` : phase.name
+    lines.push(`  ${pid}["${label}"]`)
+    lines.push(`  root --> ${pid}`)
+    phaseIds.push({ id: pid, phase })
+  })
+
+  if (phaseIds.length === 0 && modules.value.length > 0) {
+    modules.value.forEach((mod, mi) => {
+      const mid = `m${mi}`
+      lines.push(`  ${mid}["${mod.name}"]`)
+      lines.push(`  root --> ${mid}`)
+      ;(mod.knowledge_points || []).forEach((kp, ki) => {
+        const kid = `kp${mi}_${ki}`
+        lines.push(`  ${kid}("${kp.name}")`)
+        lines.push(`  ${mid} --> ${kid}`)
+      })
+    })
+  } else {
+    phaseIds.forEach(({ id: pid, phase }) => {
+      const phaseModules = phase.modules?.map(mid => modulesMap.value[mid]).filter(Boolean) || []
+      phaseModules.forEach((mod, mi) => {
+        const mid = `${pid}_m${mi}`
+        lines.push(`  ${mid}["${mod.name}"]`)
+        lines.push(`  ${pid} --> ${mid}`)
+        ;(mod.knowledge_points || []).forEach((kp, ki) => {
+          const kid = `${mid}_kp${ki}`
+          lines.push(`  ${kid}("${kp.name}")`)
+          lines.push(`  ${mid} --> ${kid}`)
+        })
+      })
+    })
+  }
+
+  return lines.join('\n')
+}
+
+async function renderMindmap() {
+  if (!mindmapEl.value) return
+  const code = buildMermaidCode()
+  try {
+    const id = 'mermaid-' + Date.now()
+    const { svg } = await mermaid.render(id, code)
+    mindmapEl.value.innerHTML = svg
+  } catch (e) {
+    console.error('Mermaid render error:', e)
+    mindmapEl.value.innerHTML = '<p style="color:var(--color-text-muted);text-align:center;padding:40px;">脑图渲染失败，请切换到列表视图</p>'
+  }
+}
+
+watch(viewMode, async (v) => {
+  if (v === 'mindmap') {
+    await nextTick()
+    renderMindmap()
+  }
+})
+
+watch([syllabus, modules], async () => {
+  if (viewMode.value === 'mindmap') {
+    await nextTick()
+    renderMindmap()
+  }
+})
+
+onMounted(async () => {
+  await loadSyllabusList()
+  await loadCurriculum()
   ws.connect()
   ws.requestStateSync()
 })
@@ -387,7 +535,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 16px;
-  margin-bottom: 28px;
+  margin-bottom: 16px;
   flex-wrap: wrap;
 }
 
@@ -436,6 +584,74 @@ onMounted(() => {
 .btn-generate:hover {
   transform: translateY(-1px);
   box-shadow: 0 2px 8px rgba(124, 77, 255, 0.3);
+}
+
+.syllabus-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.syllabus-tab {
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.syllabus-tab:hover {
+  border-color: var(--color-accent);
+}
+
+.syllabus-tab.active {
+  background: #7c4dff;
+  color: white;
+  border-color: #7c4dff;
+}
+
+.tab-status {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+.tab-status.pending { background: #fff3e0; color: #e65100; }
+.tab-status.approved { background: #e8f5e9; color: #2e7d32; }
+.tab-status.rejected { background: #fce4ec; color: #c62828; }
+.syllabus-tab.active .tab-status { background: rgba(255,255,255,0.25); color: white; }
+
+.view-toggle {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+}
+
+.toggle-btn {
+  padding: 6px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.toggle-btn.active {
+  background: var(--color-ink);
+  color: white;
+  border-color: var(--color-ink);
 }
 
 .generate-overlay {
@@ -529,6 +745,10 @@ onMounted(() => {
   background: rgba(124, 77, 255, 0.06);
 }
 
+.material-option.has-syllabus {
+  border-left: 3px solid #4caf50;
+}
+
 .material-option-info {
   display: flex;
   flex-direction: column;
@@ -543,6 +763,21 @@ onMounted(() => {
 .material-option-meta {
   font-size: 12px;
   color: var(--color-text-muted);
+}
+
+.has-syllabus-badge {
+  color: #4caf50;
+  font-weight: 600;
+}
+
+.material-badge {
+  font-size: 12px;
+  padding: 2px 10px;
+  background: #e8f5e9;
+  color: #2e7d32;
+  border-radius: 10px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .material-check {
@@ -862,6 +1097,25 @@ onMounted(() => {
   gap: 10px;
 }
 
+.mindmap-container {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 24px;
+  min-height: 400px;
+  overflow: auto;
+}
+
+.mindmap-render {
+  display: flex;
+  justify-content: center;
+}
+
+.mindmap-render :deep(svg) {
+  max-width: 100%;
+  height: auto;
+}
+
 .loading {
   text-align: center;
   padding: 60px 0;
@@ -906,6 +1160,9 @@ onMounted(() => {
   }
   .btn-sync {
     margin-left: 0;
+  }
+  .syllabus-tabs {
+    flex-wrap: nowrap;
   }
 }
 </style>

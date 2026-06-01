@@ -118,7 +118,11 @@ async def process_material(
         task.progress = 70
         await _notify(ws_notify, material_id, task)
 
-        outline = await _generate_outline(result.text, uow_factory)
+        try:
+            outline = await _generate_outline(result.text, uow_factory)
+        except Exception as outline_err:
+            logger.warning(f"Outline generation failed for material {material_id}: {outline_err}")
+            outline = None
 
         if outline:
             task.progress = 90
@@ -169,30 +173,32 @@ async def process_material(
 
 
 async def _generate_outline(text_content: str, uow_factory) -> Optional[dict]:
-    """Use LLM to generate a structured outline from text content"""
-    try:
-        from app.services.chat_service import LLMProvider
-        from app.repositories.unit_of_work import UnitOfWork
+    """Use LLM to generate a structured outline from text content
+    
+    Raises exceptions with descriptive messages instead of returning None,
+    so callers can report the specific cause of failure.
+    """
+    from app.services.chat_service import LLMProvider
+    from app.repositories.unit_of_work import UnitOfWork
 
-        async with UnitOfWork() as uow:
-            config_obj = await uow.model_configs.get_default()
-            if not config_obj:
-                logger.warning("No default model config for outline generation")
-                return None
+    async with UnitOfWork() as uow:
+        config_obj = await uow.model_configs.get_default()
+        if not config_obj:
+            raise ValueError("未配置默认AI模型，请前往设置页面配置模型和API Key")
 
-            config_dict = {
-                "provider": config_obj.provider,
-                "model_name": config_obj.model_name,
-                "api_key": config_obj.api_key,
-                "base_url": config_obj.base_url,
-                "group_id": getattr(config_obj, "group_id", None),
-            }
+        config_dict = {
+            "provider": config_obj.provider,
+            "model_name": config_obj.model_name,
+            "api_key": config_obj.api_key,
+            "base_url": config_obj.base_url,
+            "group_id": getattr(config_obj, "group_id", None),
+        }
 
-        llm = LLMProvider(config_dict)
+    llm = LLMProvider(config_dict)
 
-        truncated = text_content[:8000]
+    truncated = text_content[:8000]
 
-        prompt = f"""你是一位专业的课程设计师。请分析以下教材内容，为其设计一份结构化的学习大纲。
+    prompt = f"""你是一位专业的课程设计师。请分析以下教材内容，为其设计一份结构化的学习大纲。
 
 教材内容片段：
 {truncated}
@@ -228,28 +234,39 @@ async def _generate_outline(text_content: str, uow_factory) -> Optional[dict]:
   ]
 }}"""
 
-        messages = [{"role": "user", "content": prompt}]
-        response = await llm.chat(messages)
+    messages = [{"role": "user", "content": prompt}]
+    response = await llm.chat(messages)
 
-        response = response.strip()
-        if response.startswith("```json"):
-            response = response[7:]
-        if response.startswith("```"):
-            response = response[3:]
-        if response.endswith("```"):
-            response = response[:-3]
-        response = response.strip()
+    if not response:
+        raise ValueError("AI返回了空内容，请检查模型配置或重试")
 
-        outline = json.loads(response)
-        logger.info(f"Generated outline: {outline.get('name', 'unknown')} with {len(outline.get('modules', []))} modules")
-        return outline
+    import re
+    response = re.sub(r'<think\b.*?</think\s*>?', '', response, flags=re.DOTALL | re.IGNORECASE)
+    response = response.strip()
 
+    if response.startswith("```json"):
+        response = response[7:]
+    if response.startswith("```"):
+        response = response[3:]
+    if response.endswith("```"):
+        response = response[:-3]
+    response = response.strip()
+
+    json_match = re.search(r'\{[\s\S]*\}', response)
+    if not json_match:
+        logger.error(f"No JSON object found in LLM response. Response preview: {response[:500]}")
+        raise ValueError("AI返回的内容中未找到有效JSON，请重试或更换模型")
+
+    json_str = json_match.group(0)
+
+    try:
+        outline = json.loads(json_str)
     except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse LLM outline response as JSON: {e}")
-        return None
-    except Exception as e:
-        logger.error(f"Outline generation failed: {e}")
-        return None
+        logger.error(f"Failed to parse LLM outline response as JSON: {e}, response preview: {json_str[:500]}")
+        raise ValueError(f"AI返回的内容无法解析为JSON，请重试或更换模型")
+
+    logger.info(f"Generated outline: {outline.get('name', 'unknown')} with {len(outline.get('modules', []))} modules")
+    return outline
 
 
 async def _update_material_status(uow_factory, material_id: int, status: str,

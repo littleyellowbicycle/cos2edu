@@ -159,11 +159,14 @@ async def list_generatable_materials(request: Request):
         results = []
         for m in all_materials:
             if m.content and len(m.content.strip()) > 100:
+                syllabus = await uow.syllabuses.get_by_material_id(m.id)
                 results.append({
                     "id": m.id,
                     "title": m.title,
                     "status": m.status,
                     "char_count": m.char_count or len(m.content),
+                    "has_syllabus": syllabus is not None,
+                    "syllabus_status": syllabus.review_status if syllabus else None,
                 })
     return results
 
@@ -172,8 +175,6 @@ async def list_generatable_materials(request: Request):
 @limiter.limit("5/minute")
 async def generate_outline(request: Request, material_id: int):
     """Trigger LLM outline generation for a material"""
-    from app.services.chat_service import LLMProvider
-    from app.repositories.unit_of_work import UnitOfWork
     from app.tasks.material_pipeline import _generate_outline
 
     async with UnitOfWork() as uow:
@@ -184,12 +185,16 @@ async def generate_outline(request: Request, material_id: int):
             raise HTTPException(status_code=400, detail="教材内容不足，无法生成大纲")
         text_content = material.content
 
-    outline = await _generate_outline(text_content, UnitOfWork)
-    if not outline:
-        raise HTTPException(status_code=500, detail="大纲生成失败，请检查LLM配置")
+    try:
+        outline = await _generate_outline(text_content, UnitOfWork)
+    except ValueError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        logger.error(f"Outline generation error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"大纲生成失败: {str(e)}")
 
     async with UnitOfWork() as uow:
-        from models.syllabus import Syllabus
+        material = await uow.materials.get_by_id(material_id)
         existing = await uow.syllabuses.get_by_material_id(material_id)
         if existing:
             await uow.syllabuses.update(existing, {
@@ -208,20 +213,56 @@ async def generate_outline(request: Request, material_id: int):
                 "generated_by": "llm",
                 "review_status": "pending",
             })
-        await uow.materials.update(material, {
-            "status": "pending_review",
-            "review_status": "pending",
-        })
+        if material:
+            await uow.materials.update(material, {
+                "status": "pending_review",
+                "review_status": "pending",
+            })
 
     return {"status": "ok", "syllabus": outline}
 
 
+@router.get("/syllabuses")
+@limiter.limit("60/minute")
+async def list_syllabuses(request: Request):
+    """List all syllabuses grouped by material"""
+    async with UnitOfWork() as uow:
+        all_syllabuses = await uow.syllabuses.get_all_with_material()
+        results = []
+        for s in all_syllabuses:
+            material_title = ""
+            if s.material_id:
+                material = await uow.materials.get_by_id(s.material_id)
+                if material:
+                    material_title = material.title or f"教材#{material.id}"
+            results.append({
+                "id": s.id,
+                "material_id": s.material_id,
+                "material_title": material_title,
+                "name": s.name,
+                "total_days": s.total_days,
+                "generated_by": s.generated_by,
+                "review_status": s.review_status,
+                "created_at": str(s.created_at) if s.created_at else None,
+            })
+    return results
+
+
 @router.get("/syllabus")
 @limiter.limit("60/minute")
-async def get_curriculum_syllabus(request: Request):
-    from app.graph.knowledge_graph import KnowledgeGraph
+async def get_curriculum_syllabus(request: Request, material_id: Optional[int] = None):
+    async with UnitOfWork() as uow:
+        if material_id:
+            syllabus = await uow.syllabuses.get_by_material_id(material_id)
+            if syllabus:
+                return syllabus.content
+        else:
+            approved = await uow.syllabuses.get_approved()
+            if approved:
+                latest = approved[-1]
+                return latest.content
+
     import yaml
-    from pathlib import Path
     import os
     import sys
 
@@ -244,25 +285,81 @@ async def get_curriculum_syllabus(request: Request):
 
 @router.get("/modules")
 @limiter.limit("60/minute")
-async def get_curriculum_modules(request: Request):
-    from app.graph.knowledge_graph import KnowledgeGraph
-    from pathlib import Path
-    import os
-    import sys
+async def get_curriculum_modules(request: Request, material_id: Optional[int] = None):
+    from app.api.v1.ws import get_narrative_engine
 
-    if getattr(sys, 'frozen', False):
-        base_dir = os.path.dirname(sys.executable)
-    else:
-        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-
-    modules_dir = os.path.join(base_dir, "content", "modules")
     modules = []
 
-    from app.main import _narrative_engine
-    if _narrative_engine:
-        kg = _narrative_engine.graph
+    async with UnitOfWork() as uow:
+        if material_id:
+            syllabus = await uow.syllabuses.get_by_material_id(material_id)
+            if syllabus and syllabus.content and "modules" in syllabus.content:
+                for mod in syllabus.content.get("modules", []):
+                    if not mod.get("id") and not mod.get("name"):
+                        continue
+                    module_data = {
+                        "id": mod.get("id", ""),
+                        "name": mod.get("name", ""),
+                        "order": mod.get("order", 0),
+                        "estimated_hours": mod.get("estimated_hours", 0),
+                        "prerequisites": mod.get("prerequisites", []),
+                        "knowledge_points": [
+                            {
+                                "id": kp.get("id", ""),
+                                "name": kp.get("name", ""),
+                                "difficulty": kp.get("difficulty", 1),
+                                "key_concepts": kp.get("key_concepts", []),
+                                "prerequisites": kp.get("prerequisites", []),
+                            }
+                            for kp in mod.get("knowledge_points", [])
+                        ],
+                    }
+                    modules.append(module_data)
+                if modules:
+                    return modules
+        else:
+            approved = await uow.syllabuses.get_approved()
+            if approved:
+                latest = approved[-1]
+                if latest.content and "modules" in latest.content:
+                    for mod in latest.content.get("modules", []):
+                        if not mod.get("id") and not mod.get("name"):
+                            continue
+                        module_data = {
+                            "id": mod.get("id", ""),
+                            "name": mod.get("name", ""),
+                            "order": mod.get("order", 0),
+                            "estimated_hours": mod.get("estimated_hours", 0),
+                            "prerequisites": mod.get("prerequisites", []),
+                            "knowledge_points": [
+                                {
+                                    "id": kp.get("id", ""),
+                                    "name": kp.get("name", ""),
+                                    "difficulty": kp.get("difficulty", 1),
+                                    "key_concepts": kp.get("key_concepts", []),
+                                    "prerequisites": kp.get("prerequisites", []),
+                                }
+                                for kp in mod.get("knowledge_points", [])
+                            ],
+                        }
+                        modules.append(module_data)
+                    if modules:
+                        return modules
+
+    engine = get_narrative_engine()
+    if engine:
+        kg = engine.graph
+        module_groups = {}
         for pid, meta in kg.get_all_points().items():
-            modules.append({
+            mid = meta.module_name
+            if mid not in module_groups:
+                module_groups[mid] = {
+                    "id": mid,
+                    "name": mid,
+                    "knowledge_points": [],
+                    "prerequisites": [],
+                }
+            module_groups[mid]["knowledge_points"].append({
                 "id": meta.id,
                 "name": meta.name,
                 "module_name": meta.module_name,
@@ -272,6 +369,7 @@ async def get_curriculum_modules(request: Request):
                 "suggested_questions": meta.suggested_questions,
                 "prerequisites": meta.prerequisites,
             })
+        modules = list(module_groups.values())
 
     return modules
 

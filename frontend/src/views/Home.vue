@@ -47,12 +47,6 @@
           <p>配置 AI 模型和 API Key，确保对话功能正常运行</p>
           <span class="feature-arrow">→</span>
         </div>
-        <div class="feature-card" @click="$router.push('/characters/create')">
-          <div class="feature-icon">✦</div>
-          <h3>创建角色</h3>
-          <p>从模板快速创建教学角色，自定义性格和情感配置</p>
-          <span class="feature-arrow">→</span>
-        </div>
         <div class="feature-card" @click="$router.push('/editor')">
           <div class="feature-icon"></div>
           <h3>内容编辑器</h3>

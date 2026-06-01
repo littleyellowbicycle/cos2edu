@@ -95,7 +95,9 @@ export default {
     reloadContent: () => apiClient.post('/content/reload'),
   },
   curriculum: {
-    getSyllabus: () => apiClient.get('/curriculum/syllabus'),
-    getModules: () => apiClient.get('/curriculum/modules'),
+    getSyllabus: (materialId) => apiClient.get('/curriculum/syllabus', { params: materialId ? { material_id: materialId } : {} }),
+    getModules: (materialId) => apiClient.get('/curriculum/modules', { params: materialId ? { material_id: materialId } : {} }),
+    listSyllabuses: () => apiClient.get('/curriculum/syllabuses'),
+    listGeneratableMaterials: () => apiClient.get('/curriculum/materials/generatable'),
   }
 }

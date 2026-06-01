@@ -379,7 +379,8 @@ async def create_character_from_template(request: Request, body: CharacterYAMLRe
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"创建角色失败: {str(e)}")
 
-    from app.main import _narrative_engine
+    from app.api.v1.ws import get_narrative_engine
+    _narrative_engine = get_narrative_engine()
     if _narrative_engine and _narrative_engine.characters:
         _narrative_engine.characters.load_characters()
 
@@ -427,7 +428,8 @@ async def get_character_templates(request: Request):
 @router.post("/content/reload")
 @limiter.limit("10/minute")
 async def reload_content(request: Request):
-    from app.main import _narrative_engine
+    from app.api.v1.ws import get_narrative_engine
+    _narrative_engine = get_narrative_engine()
 
     if not _narrative_engine:
         raise HTTPException(status_code=503, detail="叙事引擎未初始化")

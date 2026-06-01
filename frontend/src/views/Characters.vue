@@ -11,7 +11,7 @@
           <p class="page-subtitle">管理你的 AI 教学伙伴</p>
         </div>
       </div>
-      <button class="btn-create" @click="showCreateDialog = true">
+      <button class="btn-create" @click="router.push('/characters/create')">
         <span class="btn-icon">+</span>
         创建角色
       </button>
@@ -27,7 +27,7 @@
         <div class="empty-icon">◈</div>
         <h3>暂无角色</h3>
         <p>创建你的第一个 AI 教学角色，开始苏格拉底式对话</p>
-        <button class="btn-primary" @click="showCreateDialog = true">创建角色</button>
+        <button class="btn-primary" @click="router.push('/characters/create')">创建角色</button>
       </div>
 
       <div v-else class="characters-grid">
@@ -131,7 +131,7 @@
 
     <el-dialog 
       v-model="showCreateDialog" 
-      :title="editingCharacter ? '编辑角色' : '创建角色'"
+      title="编辑角色"
       width="500px"
       class="character-dialog"
     >

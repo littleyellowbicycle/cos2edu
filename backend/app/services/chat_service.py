@@ -115,13 +115,21 @@ class LLMProvider:
                     system=system_msg,
                     messages=ant_messages
                 )
-                return response.content[0].text
+                content = response.content[0].text
             else:
                 response = await client.chat.completions.create(
                     model=self.model_name,
                     messages=messages
                 )
-                return response.choices[0].message.content
+                msg = response.choices[0].message
+                content = msg.content
+                if not content and hasattr(msg, 'reasoning_content') and msg.reasoning_content:
+                    logger.info(f"[LLMProvider] content is None, using reasoning_content as fallback")
+                    content = msg.reasoning_content
+
+            if content:
+                content = ChatService._strip_think_tags(content)
+            return content or ""
         except Exception as e:
             logger.error(f"LLM chat error [{self.provider}]: {str(e)}")
             raise
@@ -311,7 +319,7 @@ class ChatService:
     @staticmethod
     def _strip_think_tags(content: str) -> str:
         import re
-        content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL | re.IGNORECASE)
+        content = re.sub(r'<think\b.*?</think\s*>?', '', content, flags=re.DOTALL | re.IGNORECASE)
         return content.strip()
     
     @staticmethod

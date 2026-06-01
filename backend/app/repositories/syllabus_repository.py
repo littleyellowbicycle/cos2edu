@@ -21,3 +21,9 @@ class SyllabusRepository(BaseRepository):
             select(self.model).filter(self.model.review_status == "approved")
         )
         return result.scalars().all()
+
+    async def get_all_with_material(self):
+        result = await self.session.execute(
+            select(self.model).order_by(self.model.created_at.desc())
+        )
+        return result.scalars().all()

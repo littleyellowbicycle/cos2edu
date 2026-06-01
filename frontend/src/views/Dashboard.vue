@@ -95,7 +95,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { CircleCheck, Loading, Lock, TrendCharts } from '@element-plus/icons-vue'
-import api from '@/api'
+import { apiClient } from '@/api'
 
 const loading = ref(true)
 const dashboardData = ref(null)
@@ -133,7 +133,7 @@ function statusLabel(status) {
 
 onMounted(async () => {
   try {
-    dashboardData.value = await api.get('/curriculum/progress-summary')
+    dashboardData.value = await apiClient.get('/curriculum/progress-summary')
   } catch (e) {
     console.error('Failed to load dashboard:', e)
   } finally {
