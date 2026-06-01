@@ -12,6 +12,7 @@ from starlette.responses import FileResponse
 from app.core.limiter import limiter
 from app.core.config import settings
 from app.core.logging_config import get_logger
+from app.services.character_card import export_character_card, import_character_card
 from app.schemas import (
     CharacterCreate, CharacterUpdate, CharacterResponse,
     MaterialCreate, MaterialUpdate, MaterialResponse,
@@ -186,6 +187,52 @@ async def delete_character(request: Request, character_id: int):
     if not await CharacterService.delete(character_id):
         raise HTTPException(status_code=404, detail="角色不存在")
     return {"message": "删除成功"}
+
+
+@router.get("/characters/{character_id}/export-card")
+@limiter.limit("10/minute")
+async def export_character_card_endpoint(request: Request, character_id: int):
+    try:
+        png_bytes = await export_character_card(character_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"导出角色卡失败: {e}")
+        raise HTTPException(status_code=500, detail=f"导出角色卡失败: {str(e)}")
+
+    character = await CharacterService.get_by_id(character_id)
+    filename = f"{character.name}_character_card.png" if character else "character_card.png"
+
+    from starlette.responses import Response
+    return Response(
+        content=png_bytes,
+        media_type="image/png",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
+
+
+@router.post("/characters/import-card")
+@limiter.limit("10/minute")
+async def import_character_card_endpoint(
+    request: Request,
+    file: UploadFile = File(...)
+):
+    if not file.filename.lower().endswith(".png"):
+        raise HTTPException(status_code=400, detail="仅支持 PNG 格式的角色卡文件")
+
+    content = await file.read()
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="文件大小不能超过 10MB")
+
+    try:
+        result = await import_character_card(content)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"导入角色卡失败: {e}")
+        raise HTTPException(status_code=500, detail=f"导入角色卡失败: {str(e)}")
+
+    return result
 
 
 @router.get("/avatars/{filename}")

@@ -11,10 +11,23 @@
           <p class="page-subtitle">管理你的 AI 教学伙伴</p>
         </div>
       </div>
-      <button class="btn-create" @click="router.push('/characters/create')">
-        <span class="btn-icon">+</span>
-        创建角色
-      </button>
+      <div class="header-actions">
+        <button class="btn-import" @click="triggerImport">
+          <span class="btn-icon">📥</span>
+          导入角色卡
+        </button>
+        <button class="btn-create" @click="router.push('/characters/create')">
+          <span class="btn-icon">+</span>
+          创建角色
+        </button>
+      </div>
+      <input
+        ref="importFileInput"
+        type="file"
+        accept=".png"
+        style="display: none"
+        @change="handleImportFile"
+      />
     </header>
 
     <main class="characters-content">
@@ -51,6 +64,7 @@
           <div class="card-actions">
             <button class="btn-chat" @click="openMaterialSelector(char)">开始对话</button>
             <button class="btn-edit" @click="editCharacter(char)">编辑</button>
+            <button class="btn-export" @click="exportCard(char)" title="导出角色卡">📤</button>
             <button class="btn-delete" @click="deleteCharacter(char.id)">删除</button>
           </div>
         </article>
@@ -129,8 +143,61 @@
       </template>
     </el-dialog>
 
+    <el-dialog
+      v-model="showImportResult"
+      title="角色卡导入结果"
+      width="560px"
+      class="import-result-dialog"
+    >
+      <div v-if="importResult" class="import-result-content">
+        <div class="import-success-banner">
+          <span class="success-icon">✅</span>
+          <span>角色「{{ importResult.character.name }}」导入成功</span>
+        </div>
+
+        <div class="import-detail-section">
+          <h4>已导入字段</h4>
+          <div class="imported-fields">
+            <div class="field-item" v-if="importResult.character.description">
+              <span class="field-label">描述</span>
+              <span class="field-value">{{ truncate(importResult.character.description, 80) }}</span>
+            </div>
+            <div class="field-item" v-if="importResult.character.personality">
+              <span class="field-label">性格</span>
+              <span class="field-value">{{ truncate(importResult.character.personality, 80) }}</span>
+            </div>
+            <div class="field-item" v-if="importResult.character.background">
+              <span class="field-label">背景</span>
+              <span class="field-value">{{ truncate(importResult.character.background, 80) }}</span>
+            </div>
+            <div class="field-item" v-if="importResult.imported_fields.first_mes">
+              <span class="field-label">开场白</span>
+              <span class="field-value">{{ truncate(importResult.imported_fields.first_mes, 80) }}</span>
+            </div>
+            <div class="field-item" v-if="importResult.imported_fields.system_prompt">
+              <span class="field-label">系统提示</span>
+              <span class="field-value">{{ truncate(importResult.imported_fields.system_prompt, 80) }}</span>
+            </div>
+            <div class="field-item" v-if="importResult.imported_fields.tags && importResult.imported_fields.tags.length">
+              <span class="field-label">标签</span>
+              <span class="field-value">{{ importResult.imported_fields.tags.join(', ') }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="importResult.missing_fields.length" class="import-detail-section missing-section">
+          <h4>⚠️ 以下字段在角色卡中为空（已使用默认值）</h4>
+          <div class="missing-fields">
+            <span v-for="field in importResult.missing_fields" :key="field" class="missing-tag">{{ field }}</span>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <button class="btn-submit" @click="showImportResult = false">确定</button>
+      </template>
+    </el-dialog>
+
     <el-dialog 
-      v-model="showCreateDialog" 
       title="编辑角色"
       width="500px"
       class="character-dialog"
@@ -291,6 +358,11 @@ const form = ref({
   avatar: '',
   avatar_type: 'emoji'
 })
+
+const importFileInput = ref(null)
+const showImportResult = ref(false)
+const importResult = ref(null)
+const importing = ref(false)
 
 const emojiSuggestions = ['😊', '😎', '🤔', '👍', '🎓', '📚', '💡', '🌟', '😃', '🤓', '🧐', '✨']
 const avatarPreview = ref('')
@@ -460,6 +532,61 @@ function closeDialog() {
   showCreateDialog.value = false
   editingCharacter.value = null
   form.value = { name: '', description: '', personality: '', background: '', avatar: '', avatar_type: 'emoji' }
+}
+
+function triggerImport() {
+  importFileInput.value?.click()
+}
+
+async function handleImportFile(event) {
+  const file = event.target.files[0]
+  if (!file) return
+
+  if (!file.name.toLowerCase().endsWith('.png')) {
+    ElMessage.error('仅支持 PNG 格式的角色卡文件')
+    return
+  }
+
+  importing.value = true
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    const result = await api.characters.importCard(formData)
+    importResult.value = result
+    showImportResult.value = true
+    await store.fetchAll()
+    characters.value = store.characters
+  } catch (e) {
+    const msg = e?.response?.data?.detail || e?.message || '导入角色卡失败'
+    ElMessage.error(msg)
+  } finally {
+    importing.value = false
+    if (importFileInput.value) {
+      importFileInput.value.value = ''
+    }
+  }
+}
+
+async function exportCard(char) {
+  try {
+    const blob = await api.characters.exportCard(char.id)
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${char.name}_character_card.png`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    window.URL.revokeObjectURL(url)
+    ElMessage.success(`角色「${char.name}」已导出`)
+  } catch (e) {
+    ElMessage.error('导出角色卡失败')
+  }
+}
+
+function truncate(str, maxLen) {
+  if (!str) return ''
+  return str.length > maxLen ? str.substring(0, maxLen) + '...' : str
 }
 </script>
 
@@ -1120,6 +1247,132 @@ function closeDialog() {
 }
 
 .material-selector-dialog :deep(.el-dialog__body) {
+  padding: 24px 32px;
+}
+
+.header-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.btn-import {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 600;
+  padding: 14px 28px;
+  background: transparent;
+  color: var(--color-ink);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-import:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  transform: translateY(-2px);
+}
+
+.btn-export {
+  font-size: 16px;
+  padding: 10px 14px;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  line-height: 1;
+}
+
+.btn-export:hover {
+  border-color: var(--color-accent);
+  background: var(--color-bg-warm);
+}
+
+.import-result-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.import-success-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 20px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #166534;
+}
+
+.success-icon {
+  font-size: 20px;
+}
+
+.import-detail-section h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-ink);
+  margin-bottom: 12px;
+}
+
+.imported-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.field-item {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  padding: 8px 12px;
+  background: var(--color-bg);
+  border-radius: 4px;
+}
+
+.field-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  min-width: 60px;
+  flex-shrink: 0;
+}
+
+.field-value {
+  font-size: 13px;
+  color: var(--color-text);
+  line-height: 1.5;
+}
+
+.missing-section h4 {
+  color: #b45309;
+}
+
+.missing-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.missing-tag {
+  font-size: 12px;
+  padding: 4px 12px;
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+  border-radius: 20px;
+}
+
+.import-result-dialog :deep(.el-dialog__body) {
   padding: 24px 32px;
 }
 </style>

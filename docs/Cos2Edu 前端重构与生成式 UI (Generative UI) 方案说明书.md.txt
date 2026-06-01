@@ -1,0 +1,101 @@
+Cos2Edu 前端重构与生成式 UI (Generative UI) 方案说明书
+1. 项目背景与目标
+当前 cos2edu (苏格拉底式 AI 教学系统) 前端基于 Vue 3 手写构建，存在 UI 视觉陈旧、交互表现力不足的问题。为提升产品的教学沉浸感与用户体验，计划进行前端重构。
+核心目标：
+视觉与交互现代化：引入现代设计系统，利用 AI 辅助工具（v0/Bolt等）快速重构 UI。
+实现运行时 Generative UI：让 AI 在教学对话中动态渲染可交互组件（如情绪卡片、知识图谱、时间线），而非仅返回纯文本。
+支持桌面端封装：重构后的前端需无缝支持打包为轻量级桌面应用。
+2. 整体架构设计
+基于现有后端资产与桌面端需求，确立 “FastAPI 后端主导 + React 前端渲染 + Tauri 桌面容器” 的架构。
+┌─────────────────────────────────────────────────────────────┐
+│                    桌面端容器                         │
+│                                                             │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │              前端渲染层 (React + Vite)                 │  │
+│  │                                                       │  │
+│  │  - 基础 UI 框架                   │  │
+│  │  - WebSocket Client (监听消息)                        │  │
+│  │  - 动态组件映射表             │  │
+│  │  - 根据 UI JSON 动态渲染 Generative 组件              │  │
+│  └───────────────┬───────────────────────────────────────┘  │
+│                  │ WS / HTTP                                 │
+│  ┌───────────────▼───────────────────────────────────────┐  │
+│  │              后端服务层                        │  │
+│  │                                                       │  │
+│  │  - Narrative Engine (叙事/教学引擎)                    │  │
+│  │  - LLM Function Calling 调度器                        │  │
+│  │  - UI JSON 转换映射层 (将工具调用转为组件描述)         │  │
+│  │  - WebSocket Server (推送 UI 指令与文本)               │  │
+│  └───────────────┬───────────────────────────────────────┘  │
+│                  │ API Call                                  │
+│  ┌───────────────▼───────────────────────────────────────┐  │
+│  │              大语言模型 (GPT-4o / 通义等)               │  │
+│  │  - 理解意图                                           │  │
+│  │  - 触发 Function Calling (决定调用哪个前端组件)        │  │
+│  └───────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+3. 核心机制：Generative UI 实现方案
+本方案采用 “LLM 决策 -> 后端翻译 -> 前端渲染” 的闭环模式，确保安全性与可控性。
+3.1 角色定义
+LLM (决策者)：根据对话上下文判断何时该展示组件，但不直接生成代码。
+FastAPI (翻译官)：暴露预定义的工具给 LLM，将其调用意图转换为前端约定的 UI JSON。
+React (渲染器)：解析 UI JSON，通过组件映射表动态渲染。
+3.2 交互时序（以提问“苏格拉底怎么死的”为例）
+用户输入：React 发送消息至 FastAPI。
+后端请求 LLM：FastAPI 携带预定义的 tools 请求 LLM。tools = [{
+    "type": "function",
+    "function": {
+        "name": "show_emotion_card",
+        "description": "当角色情绪变化时展示",
+        "parameters": { "mood": {"type": "string"}, "trust": {"type": "number"} }
+    }
+}]
+LLM 返回工具调用：LLM 判断需要展示情绪和时间线，返回 tool_calls。{ "tool_calls": [{ "function": { "name": "show_emotion_card", "arguments": "{\"mood\": \"sad\", \"trust\": 0.8}" } }] }
+后端构造 UI JSON：FastAPI 拦截工具调用，映射为前端规范格式并推送。{
+  "type": "ui",
+  "components": [
+    { "id": "1", "component": "EmotionCard", "props": { "mood": "sad", "trust": 0.8 } }
+  ]
+}
+前端动态渲染：React 根据 component 字段查找本地组件并渲染。const ComponentMap = { EmotionCard, Timeline };
+// 动态渲染逻辑
+const Comp = ComponentMap[item.component];
+return Comp ? <Comp {...item.props} /> : null;
+3.3 为什么不让 LLM 直接生成 UI JSON？
+防幻觉：LLM 易生成非法格式或不存在的组件名，Function Calling 保障格式 100% 合法。
+安全性：参数经过后端校验（Pydantic），防止注入攻击。
+解耦迭代：前端组件重命名只需改后端映射层，无需修改 Prompt。
+4. 桌面端封装策略：Tauri 优先
+4.1 技术选型对比
+4.2 推荐架构
+采用 Tauri + Vite + React。Tauri 仅作为轻量级壳子提供系统级 API（文件读写、窗口控制等），业务逻辑依然由内嵌的 FastAPI 或远程服务提供。
+5. 方案对比：为什么放弃 Next.js + Vercel AI SDK？
+在设计 Generative UI 时，业内常见的 Next.js + Vercel AI SDK 方案因不适用于本项目而被否决，核心差异如下：
+结论：基于桌面端打包诉求与现有 Python 资产，FastAPI 驱动的客户端动态渲染方案是唯一合理选择。
+6. 实施路线图
+阶段一：技术栈切换与 UI 基础搭建 (1-2 周)
+[ ] 使用 Vite 初始化 React + TypeScript 项目。
+[ ] 引入 TailwindCSS 与 组件库。
+[ ] 利用 v0.dev / Bolt.new 等工具，重新生成并迁移核心页面 (Chat, Curriculum, Characters)。
+阶段二：Generative UI 协议与通信建立 (1 周)
+[ ] 在 FastAPI 定义 Function Calling 的 Tools Schema。
+[ ] 制定前后端 UI JSON 规范。
+[ ] 打通 WebSocket 双向通信，实现文本消息的流式推送。
+阶段三：动态组件开发与映射 (2 周)
+[ ] 开发基础 Generative 组件：EmotionCard, KnowledgeGraph, Timeline, QuizForm。
+[ ] 在 React 端实现 ComponentMap 与动态渲染器。
+[ ] FastAPI 端实现工具调用到 UI JSON 的转换逻辑。
+阶段四：桌面端封装与集成 (1 周)
+[ ] 引入 Tauri，配置应用图标、窗口属性。
+[ ] 通过 Tauri Commands 暴露本地文件操作等系统 API 给 React。
+[ ] 处理前端与本地后端服务的进程启动与联调。
+阶段五：优化与迭代
+[ ] LLM Prompt 调优，提高工具调用准确率。
+[ ] 复杂组件的交互深化（如知识图谱的缩放拖拽）。
+[ ] 桌面端离线缓存与异常处理。
+7. 风险与应对
+风险点        影响        应对策略
+LLM 未按预期调用工具        未能触发 Generative UI，仅返回文本        优化 System Prompt；在后端设置兜底逻辑，若 LLM 返回纯文本，则包裹为默认文本气泡组件。
+动态组件渲染性能        频繁装卸复杂组件导致卡顿        组件懒加载；使用 key 控制复用而非销毁重建；限制单次推送的组件数量。
+UI JSON 协议扩展性差        后期新增组件修改成本高        协议设计时预留 metadata 字段；后端映射逻辑使用工厂模式解耦。
+Tauri 跨平台 WebView 差异        Windows/Mac 下的 CSS 渲染细微不同        严格使用 TailwindCSS 标准类；配置 Tauri 强制使用特定 WebView 版本。

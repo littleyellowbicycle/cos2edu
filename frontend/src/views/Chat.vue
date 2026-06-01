@@ -163,9 +163,76 @@ import { marked } from 'marked'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { useNarrativeStore } from '@/stores/narrative'
 
+const emojiSectionRegex = /^([\p{Emoji_Presentation}\p{Extended_Pictographic}\u{1F300}-\u{1F9FF}]+)\s+(.+)$/u
+
+const customRenderer = new marked.Renderer()
+
+customRenderer.heading = function (data) {
+  const text = data.text
+  const depth = data.depth
+  const match = text.match(emojiSectionRegex)
+  if (match) {
+    const emoji = match[1]
+    const title = match[2]
+    return `<h${depth} class="ai-heading ai-heading--emoji"><span class="ai-heading-emoji">${emoji}</span><span class="ai-heading-text">${title}</span></h${depth}>`
+  }
+  return `<h${depth} class="ai-heading">${text}</h${depth}>`
+}
+
+customRenderer.table = function (data) {
+  const headers = data.header.map(h => `<th>${h.text}</th>`).join('')
+  const rows = data.rows.map(row => {
+    const cells = row.map(cell => `<td>${cell.text}</td>`).join('')
+    return `<tr>${cells}</tr>`
+  }).join('')
+  return `<div class="ai-table-wrapper"><table class="ai-table"><thead><tr>${headers}</tr></thead><tbody>${rows}</tbody></table></div>`
+}
+
+customRenderer.blockquote = function (data) {
+  const text = data.text
+  const match = text.match(emojiSectionRegex)
+  if (match) {
+    return `<div class="ai-callout"><span class="ai-callout-emoji">${match[1]}</span><div class="ai-callout-content">${match[2]}${text.replace(match[0], '')}</div></div>`
+  }
+  return `<blockquote class="ai-blockquote">${text}</blockquote>`
+}
+
+customRenderer.list = function (data) {
+  const tag = data.ordered ? 'ol' : 'ul'
+  const items = data.items.map(item => `<li>${item.text}</li>`).join('')
+  const cls = data.ordered ? 'ai-list ai-list--ordered' : 'ai-list'
+  return `<${tag} class="${cls}">${items}</${tag}>`
+}
+
+customRenderer.paragraph = function (data) {
+  const text = data.text
+  if (text.startsWith('<h') || text.startsWith('<div class="ai-') || text.startsWith('<details')) {
+    return text
+  }
+  const strongMatch = text.match(/^<strong>([^<]+)<\/strong>\s*(.*)$/)
+  if (strongMatch) {
+    return `<p class="ai-paragraph"><strong class="ai-highlight">${strongMatch[1]}</strong>${strongMatch[2]}</p>`
+  }
+  return `<p class="ai-paragraph">${text}</p>`
+}
+
+customRenderer.hr = function () {
+  return `<hr class="ai-divider" />`
+}
+
+customRenderer.code = function (data) {
+  const lang = data.lang || ''
+  const code = data.text
+  if (lang === 'mermaid') {
+    return `<pre class="mermaid">${code}</pre>`
+  }
+  return `<div class="ai-code-block"><div class="ai-code-header"><span class="ai-code-lang">${lang || 'code'}</span></div><pre class="ai-code-content"><code>${code}</code></pre></div>`
+}
+
 marked.setOptions({
   breaks: true,
-  gfm: true
+  gfm: true,
+  renderer: customRenderer
 })
 
 function escapeHtml(text) {
@@ -1300,71 +1367,211 @@ function formatDate(dateStr) {
   font-size: 0.9em;
 }
 
-.message-text h1,
-.message-text h2,
-.message-text h3,
-.message-text h4,
-.message-text h5,
-.message-text h6 {
-  margin: 16px 0 8px;
-  font-weight: 600;
+.message-text .ai-heading {
+  margin: 20px 0 10px;
+  font-weight: 700;
   color: var(--color-ink);
+  line-height: 1.4;
 }
 
-.message-text h1 { font-size: 1.5em; }
-.message-text h2 { font-size: 1.3em; }
-.message-text h3 { font-size: 1.1em; }
+.message-text .ai-heading:first-child {
+  margin-top: 0;
+}
 
-.message-text p {
+.message-text .ai-heading--emoji {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--color-border);
+}
+
+.message-text .ai-heading-emoji {
+  font-size: 1.2em;
+  flex-shrink: 0;
+}
+
+.message-text .ai-heading-text {
+  flex: 1;
+}
+
+.message-text h1.ai-heading { font-size: 1.4em; }
+.message-text h2.ai-heading { font-size: 1.25em; }
+.message-text h3.ai-heading { font-size: 1.1em; }
+.message-text h4.ai-heading { font-size: 1em; }
+
+.message-text .ai-paragraph {
   margin: 8px 0;
+  line-height: 1.75;
+}
+
+.message-text .ai-highlight {
+  color: var(--color-accent);
+  font-weight: 700;
+}
+
+.message-text .ai-list {
+  margin: 10px 0;
+  padding-left: 0;
+  list-style: none;
+}
+
+.message-text .ai-list li {
+  position: relative;
+  padding: 6px 0 6px 24px;
+  margin: 0;
+  line-height: 1.7;
+}
+
+.message-text .ai-list li::before {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 14px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-accent);
+}
+
+.message-text .ai-list--ordered {
+  counter-reset: ai-counter;
+}
+
+.message-text .ai-list--ordered li {
+  padding-left: 28px;
+}
+
+.message-text .ai-list--ordered li::before {
+  content: counter(ai-counter);
+  counter-increment: ai-counter;
+  width: auto;
+  height: auto;
+  border-radius: 0;
+  background: none;
+  color: var(--color-accent);
+  font-weight: 700;
+  font-size: 0.9em;
+  left: 4px;
+  top: 7px;
+}
+
+.message-text .ai-table-wrapper {
+  margin: 14px 0;
+  overflow-x: auto;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+}
+
+.message-text .ai-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.message-text .ai-table th {
+  background: var(--color-ink);
+  color: white;
+  padding: 10px 14px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.message-text .ai-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--color-border);
+  line-height: 1.5;
+}
+
+.message-text .ai-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.message-text .ai-table tbody tr:nth-child(even) {
+  background: var(--color-bg-warm);
+}
+
+.message-text .ai-table tbody tr:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.message-text .ai-callout {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 14px 0;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--color-bg-warm), var(--color-surface));
+  border: 1px solid var(--color-border);
+}
+
+.message-text .ai-callout-emoji {
+  font-size: 1.3em;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.message-text .ai-callout-content {
+  flex: 1;
   line-height: 1.6;
 }
 
-.message-text ul,
-.message-text ol {
-  margin: 8px 0;
-  padding-left: 24px;
-}
-
-.message-text li {
-  margin: 4px 0;
-}
-
-.message-text blockquote {
+.message-text .ai-blockquote {
   margin: 12px 0;
-  padding: 8px 16px;
+  padding: 10px 16px;
   border-left: 4px solid var(--color-accent);
   background: var(--color-bg-warm);
+  border-radius: 0 6px 6px 0;
   color: var(--color-text-muted);
+  line-height: 1.6;
 }
 
-.message-text table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 12px 0;
-}
-
-.message-text th,
-.message-text td {
-  border: 1px solid var(--color-border);
-  padding: 8px 12px;
-  text-align: left;
-}
-
-.message-text th {
-  background: var(--color-bg-warm);
-  font-weight: 600;
-}
-
-.message-text hr {
+.message-text .ai-divider {
   border: none;
-  border-top: 1px solid var(--color-border);
-  margin: 16px 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--color-border), transparent);
+  margin: 20px 0;
+}
+
+.message-text .ai-code-block {
+  margin: 14px 0;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+}
+
+.message-text .ai-code-header {
+  padding: 6px 14px;
+  background: var(--color-ink);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  font-family: var(--font-body);
+}
+
+.message-text .ai-code-lang {
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.message-text .ai-code-content {
+  margin: 0;
+  padding: 14px;
+  background: #1e1e2e;
+  color: #cdd6f4;
+  overflow-x: auto;
+  font-family: 'Fira Code', 'Monaco', monospace;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .message-text a {
   color: var(--color-accent);
   text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .message-text a:hover {
@@ -1374,7 +1581,17 @@ function formatDate(dateStr) {
 .message-text img {
   max-width: 100%;
   height: auto;
-  border-radius: 4px;
-  margin: 8px 0;
+  border-radius: 8px;
+  margin: 10px 0;
+}
+
+.message-text strong {
+  color: var(--color-ink);
+  font-weight: 700;
+}
+
+.message-text em {
+  color: var(--color-text-muted);
+  font-style: italic;
 }
 </style>

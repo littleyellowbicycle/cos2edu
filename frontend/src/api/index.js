@@ -38,7 +38,11 @@ export default {
     update: (id, data) => apiClient.put(`/crud/characters/${id}/multipart`, data, {
       headers: { 'Content-Type': 'multipart/form-data' }
     }),
-    delete: (id) => apiClient.delete(`/crud/characters/${id}`)
+    delete: (id) => apiClient.delete(`/crud/characters/${id}`),
+    exportCard: (id) => apiClient.get(`/crud/characters/${id}/export-card`, { responseType: 'blob' }),
+    importCard: (formData) => apiClient.post('/crud/characters/import-card', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    }),
   },
   materials: {
     getAll: () => apiClient.get('/crud/materials'),
