@@ -7,48 +7,64 @@ from app.core.logging_config import get_logger
 
 logger = get_logger(__name__)
 
+_faiss = None
+np = None
 _faiss_available = False
-try:
-    import faiss
-    import numpy as np
-    _faiss_available = True
-except ImportError:
-    logger.warning("faiss or numpy not available, RAG will use long-context fallback")
-
 _fastembed_available = False
 _fastembed_model = None
-try:
-    from fastembed import TextEmbedding
-    import fastembed.common.model_management as _mm
 
-    # Monkey-patch snapshot_download to bypass HF SSL cert issues behind proxy
-    _orig_snapshot = _mm.snapshot_download
-    def _patched_snapshot(repo_id, **kwargs):
-        base_cache = kwargs.get("cache_dir", os.path.expanduser("~/.cache/fastembed"))
-        snap_base = os.path.join(
-            base_cache, f"models--{repo_id.replace('/', '--')}", "snapshots"
-        )
-        if os.path.isdir(snap_base):
-            snaps = os.listdir(snap_base)
-            if snaps:
-                return os.path.join(snap_base, snaps[0])
-        return _orig_snapshot(repo_id, **kwargs)
-    _mm.snapshot_download = _patched_snapshot
 
-    # Also patch huggingface_hub functions to avoid SSL errors
-    import huggingface_hub
-    _orig_model_info = huggingface_hub.model_info
-    from dataclasses import dataclass
-    @dataclass
-    class _MockInfo:
-        sha: str = "46fbe35fd4374a00fee7de77dfddaeb6dd6a2c59"
-    huggingface_hub.model_info = lambda *a, **kw: _MockInfo()
-    huggingface_hub.repo_info = lambda *a, **kw: _MockInfo()
+def _try_init_faiss() -> bool:
+    global _faiss, np, _faiss_available
+    if _faiss_available:
+        return True
+    try:
+        import faiss as _faiss_mod
+        import numpy as np_mod
+        _faiss = _faiss_mod
+        np = np_mod
+        _faiss_available = True
+    except ImportError:
+        logger.warning("faiss or numpy not available, RAG will use long-context fallback")
+    return _faiss_available
 
-    _fastembed_available = True
-    logger.info("fastembed imported and patches applied")
-except Exception as e:
-    logger.warning(f"fastembed not available ({type(e).__name__}: {e}), using hash fallback for embeddings")
+
+def _try_import_fastembed() -> bool:
+    global _fastembed_available
+    if _fastembed_available:
+        return True
+    try:
+        from fastembed import TextEmbedding
+        import fastembed.common.model_management as _mm
+        import huggingface_hub
+        from dataclasses import dataclass
+
+        # Monkey-patch snapshot_download to bypass HF SSL cert issues behind proxy
+        _orig_snapshot = _mm.snapshot_download
+        def _patched_snapshot(repo_id, **kwargs):
+            base_cache = kwargs.get("cache_dir", os.path.expanduser("~/.cache/fastembed"))
+            snap_base = os.path.join(
+                base_cache, f"models--{repo_id.replace('/', '--')}", "snapshots"
+            )
+            if os.path.isdir(snap_base):
+                snaps = os.listdir(snap_base)
+                if snaps:
+                    return os.path.join(snap_base, snaps[0])
+            return _orig_snapshot(repo_id, **kwargs)
+        _mm.snapshot_download = _patched_snapshot
+
+        @dataclass
+        class _MockInfo:
+            sha: str = "46fbe35fd4374a00fee7de77dfddaeb6dd6a2c59"
+        huggingface_hub.model_info = lambda *a, **kw: _MockInfo()
+        huggingface_hub.repo_info = lambda *a, **kw: _MockInfo()
+
+        _fastembed_available = True
+        logger.info("fastembed imported and patches applied")
+        return True
+    except Exception as e:
+        logger.warning(f"fastembed not available ({type(e).__name__}: {e}), using hash fallback for embeddings")
+        return False
 
 
 class RAGService:
@@ -62,27 +78,28 @@ class RAGService:
         self.chunks = []
         self._initialized = False
         self._embed_provider = None
+        self._requested_provider = embedding_provider
+        self._fastembed_attempted = False
+        self._faiss_attempted = False
 
-        if not _faiss_available:
-            logger.info("RAGService initialized in long-context fallback mode (no FAISS)")
-            return
-
-        self._resolve_provider(embedding_provider)
-        self.index = faiss.IndexFlatL2(self.embedding_dim)
-        self._initialized = True
+        self._resolve_provider(embedding_provider, lazy=True)
         logger.info(
             f"RAGService initialized (dim={self.embedding_dim}, provider={self._embed_provider})"
         )
 
-    def _resolve_provider(self, provider: str) -> None:
+    def _resolve_provider(self, provider: str, lazy: bool = False) -> None:
         if provider == "auto":
-            if _fastembed_available:
-                self._init_fastembed()
+            if _try_import_fastembed():
+                self._embed_provider = "fastembed_lazy"
+                if not lazy:
+                    self._ensure_fastembed_loaded()
             else:
                 self._embed_provider = "hash"
                 self.embedding_dim = 256
         elif provider == "fastembed":
-            self._init_fastembed()
+            self._embed_provider = "fastembed_lazy"
+            if not lazy:
+                self._ensure_fastembed_loaded()
         elif provider == "openai":
             self._embed_provider = "openai"
             self.embedding_dim = 1536
@@ -90,24 +107,48 @@ class RAGService:
             self._embed_provider = "hash"
             self.embedding_dim = 256
 
-    def _init_fastembed(self) -> None:
+    def _ensure_fastembed_loaded(self) -> bool:
         global _fastembed_model
-        try:
-            if _fastembed_model is None:
-                model_name = "BAAI/bge-small-zh-v1.5"
-                cache_dir = os.path.join(
-                    Path(__file__).resolve().parent.parent.parent, ".cache", "fastembed"
-                )
-                _fastembed_model = TextEmbedding(
-                    model_name=model_name, cache_dir=cache_dir
-                )
-                logger.info(f"Loaded fastembed model: {model_name} (dim={_fastembed_model.embedding_size})")
+        if self._fastembed_attempted:
+            return self._embed_provider == "fastembed"
+        self._fastembed_attempted = True
+        if _fastembed_model is not None:
             self._embed_provider = "fastembed"
             self.embedding_dim = _fastembed_model.embedding_size
+            return True
+        if not _try_import_fastembed():
+            self._embed_provider = "hash"
+            self.embedding_dim = 256
+            return False
+        try:
+            from fastembed import TextEmbedding
+            model_name = "BAAI/bge-small-zh-v1.5"
+            cache_dir = os.path.join(
+                Path(__file__).resolve().parent.parent.parent, ".cache", "fastembed"
+            )
+            _fastembed_model = TextEmbedding(
+                model_name=model_name, cache_dir=cache_dir
+            )
+            self._embed_provider = "fastembed"
+            self.embedding_dim = _fastembed_model.embedding_size
+            logger.info(f"Loaded fastembed model: {model_name} (dim={_fastembed_model.embedding_size})")
+            return True
         except Exception as e:
             logger.warning(f"Failed to load fastembed: {e}, falling back to hash")
             self._embed_provider = "hash"
             self.embedding_dim = 256
+            return False
+
+    def _ensure_faiss_initialized(self) -> bool:
+        if self._faiss_attempted:
+            return self._initialized
+        self._faiss_attempted = True
+        if not _try_init_faiss():
+            return False
+        self.index = _faiss.IndexFlatL2(self.embedding_dim)
+        self._initialized = True
+        logger.info("FAISS index created")
+        return True
 
     @property
     def is_ready(self) -> bool:
@@ -127,6 +168,8 @@ class RAGService:
         return chunks
 
     def _embed(self, text: str) -> list[float]:
+        if self._embed_provider == "fastembed_lazy":
+            self._ensure_fastembed_loaded()
         if self._embed_provider == "fastembed" and _fastembed_model is not None:
             return list(_fastembed_model.embed(text))[0].tolist()
         elif self._embed_provider == "openai":
@@ -173,7 +216,7 @@ class RAGService:
         return self._embed_hash(text)
 
     def index_text(self, text: str, source_id: str = "", chunk_size: int = 500, overlap: int = 100) -> int:
-        if not self._initialized or not _faiss_available:
+        if not self._ensure_faiss_initialized():
             return 0
 
         chunks = self.chunk_text(text, chunk_size, overlap)
@@ -251,7 +294,7 @@ class RAGService:
 
     def clear(self):
         if self._initialized and _faiss_available:
-            self.index = faiss.IndexFlatL2(self.embedding_dim)
+            self.index = _faiss.IndexFlatL2(self.embedding_dim)
         self.chunks = []
 
 
