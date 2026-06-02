@@ -4,7 +4,7 @@ import { ref, reactive } from 'vue'
 export const useNarrativeStore = defineStore('narrative', () => {
   const world = reactive({
     currentDay: 1,
-    totalDays: 90,
+    totalDays: 15,
     currentScene: 'classroom',
     sceneName: '教室',
     sceneDescription: '明亮的教室，窗外是数据流构成的城市天际线',
@@ -12,6 +12,8 @@ export const useNarrativeStore = defineStore('narrative', () => {
     allowedActions: ['teach', 'question', 'discuss', 'practice'],
     narrativePhase: 'prologue',
     progressPercent: 0,
+    activeSyllabusId: null,
+    activeSyllabusName: '',
   })
 
   const characters = reactive({})
@@ -48,6 +50,12 @@ export const useNarrativeStore = defineStore('narrative', () => {
         world.sceneDescription = snapshot.world.scene_info.description
         world.allowedActions = snapshot.world.scene_info.allowed_actions
         world.sceneBgColor = snapshot.world.scene_info.bg_color
+      }
+      if (snapshot.world.active_syllabus_id !== undefined) {
+        world.activeSyllabusId = snapshot.world.active_syllabus_id
+      }
+      if (snapshot.world.active_syllabus_name !== undefined) {
+        world.activeSyllabusName = snapshot.world.active_syllabus_name
       }
     }
     if (snapshot.characters) {

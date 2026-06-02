@@ -103,5 +103,6 @@ export default {
     getModules: (materialId) => apiClient.get('/curriculum/modules', { params: materialId ? { material_id: materialId } : {} }),
     listSyllabuses: () => apiClient.get('/curriculum/syllabuses'),
     listGeneratableMaterials: () => apiClient.get('/curriculum/materials/generatable'),
+    activate: (materialId) => apiClient.post('/curriculum/activate', { material_id: materialId }),
   }
 }

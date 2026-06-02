@@ -1,6 +1,7 @@
 world:
   name: "AI 学院"
   time_scale: 1
+  base_days: 15
   start_scene: "classroom"
   narrative_tone: "轻科幻校园风"
   description: "一座建在数据海洋之上的学院，用苏格拉底式的方式引导学生学习AI和机器学习"
@@ -37,31 +38,52 @@ scenes:
 time_events:
   - id: "phase1_review"
     name: "阶段1回顾测验"
-    trigger_day: 30
-    description: "转眼间已经学了一个月了！老师决定来一次小测验，看看你掌握了多少。"
+    trigger_day: 5
+    description: "基础阶段结束了！老师决定来一次小测验，看看你掌握了多少。"
     scene_change: "exam_room"
+    options:
+      - id: "accept"
+        text: "接受挑战"
+        effect: {"mood": "+0.05"}
+      - id: "negotiate"
+        text: "请求延期"
+        effect: {"trust": "-0.03"}
     condition: null
 
   - id: "phase2_review"
     name: "阶段2挑战赛"
-    trigger_day: 60
+    trigger_day: 10
     description: "进阶阶段结束，是时候验证你的实力了！"
     scene_change: "exam_room"
+    options:
+      - id: "accept"
+        text: "全力以赴"
+        effect: {"mood": "+0.08"}
+      - id: "review_first"
+        text: "先复习一下"
+        effect: {"trust": "+0.02"}
     condition: null
 
   - id: "final_exam"
     name: "终极考试"
-    trigger_day: 90
-    description: "90天的学习之旅即将结束，最后的考试将决定你是否毕业。"
+    trigger_day: 15
+    description: "15天的学习之旅即将结束，最后的考试将决定你是否毕业。"
     scene_change: "exam_room"
     condition: null
 
   - id: "encouragement"
     name: "老师的小鼓励"
     trigger_day: null
-    condition: "mastery_avg < 0.3 AND current_day > 15"
+    condition: "mastery_avg < 0.3 AND current_day > 3"
     description: ""
     description_template: "{character_name}注意到了你的困惑，给你讲了一个小故事来鼓励你继续前进。"
+    options:
+      - id: "thank"
+        text: "感谢鼓励，继续努力"
+        effect: {"trust": "+0.05"}
+      - id: "ask_help"
+        text: "请求更详细的解释"
+        effect: {"mood": "+0.03"}
 
   - id: "surprise_quiz"
     name: "随机小测验"
@@ -69,3 +91,10 @@ time_events:
     condition: "random_probability < 0.05"
     description: "突然来一个小测验，检验一下最近的学习成果！"
     scene_change: "classroom"
+    options:
+      - id: "accept"
+        text: "来吧，我准备好了"
+        effect: {"mood": "+0.02"}
+      - id: "skip"
+        text: "跳过这次测验"
+        effect: {}

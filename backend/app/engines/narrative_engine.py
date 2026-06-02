@@ -65,32 +65,81 @@ class NarrativeEngine:
 
                 self._message_counts[conversation_id] = self._message_counts.get(conversation_id, 0) + 1
 
+                point_data_for_prompt = None
                 if is_structured:
                     mastered = await self._get_mastered_points(uow)
-                    point_data = self.teaching.get_next_teaching_point(mastered)
-                    if point_data and self.assessment and self.assessment.should_trigger_assessment(
-                        point_id=point_data["point_id"],
+                    point_data_for_prompt = self.teaching.get_next_teaching_point(mastered)
+                    if point_data_for_prompt and self.assessment and self.assessment.should_trigger_assessment(
+                        point_id=point_data_for_prompt["point_id"],
                         mastered_points=mastered,
                         message_count=self._message_counts[conversation_id],
                     ):
                         yield json.dumps({
                             "type": "assessment.start",
                             "payload": {
-                                "point_id": point_data["point_id"],
-                                "point_name": point_data["name"],
-                                "message": f"很好！我们已经讨论了「{point_data['name']}」的核心概念。让我们来做个小测验，检验一下你的理解。",
+                                "point_id": point_data_for_prompt["point_id"],
+                                "point_name": point_data_for_prompt["name"],
+                                "message": f"很好！我们已经讨论了「{point_data_for_prompt['name']}」的核心概念。让我们来做个小测验，检验一下你的理解。",
                             },
                         }, ensure_ascii=False)
 
                 full_response = ""
                 try:
-                    async for chunk in ChatService.chat_stream(
-                        conversation_id=conversation_id,
-                        user_message=user_message,
-                        model_config=model_config,
-                    ):
+                    rag_context = ""
+                    try:
+                        rag_ctx = self.rag.get_context(user_message, max_tokens=1500)
+                        if rag_ctx:
+                            rag_context = rag_ctx
+                    except Exception:
+                        pass
+
+                    emotion_summary = ""
+                    if self.emotion:
+                        char_state = self.emotion.get_state(character_id)
+                        if char_state:
+                            emotion_summary = self._mood_to_description(char_state.mood)
+
+                    async with UnitOfWork() as uow_inner:
+                        from app.repositories.message_repository import MessageRepository
+                        msg_repo = MessageRepository(uow_inner.session)
+                        db_messages = await msg_repo.get_by_conversation(conversation_id)
+                        history = [{"role": m.role, "content": m.content} for m in db_messages[-30:]]
+
+                    prompt_messages = self._build_default_prompt(
+                        character_id=character_id,
+                        history=history,
+                        rag_context=rag_context,
+                        point_data=point_data_for_prompt,
+                        emotion_summary=emotion_summary,
+                    )
+                    prompt_messages.append({"role": "user", "content": user_message})
+
+                    from app.services.chat_service import LLMProvider
+                    config_dict = None
+                    if model_config:
+                        config_dict = {
+                            "provider": model_config.provider,
+                            "model_name": model_config.model_name,
+                            "api_key": model_config.api_key,
+                            "base_url": model_config.base_url,
+                            "group_id": getattr(model_config, "group_id", None),
+                        }
+                    llm = LLMProvider(config_dict)
+                    async for chunk in llm.chat_stream(prompt_messages):
                         full_response += chunk if not chunk.startswith("data:") else ""
                         yield json.dumps({"type": "chat.token", "content": chunk}, ensure_ascii=False)
+
+                    async with UnitOfWork() as uow_save:
+                        await uow_save.messages.create({
+                            "conversation_id": conversation_id,
+                            "role": "user",
+                            "content": user_message,
+                        })
+                        await uow_save.messages.create({
+                            "conversation_id": conversation_id,
+                            "role": "assistant",
+                            "content": full_response,
+                        })
                 except ValueError as e:
                     yield json.dumps({"type": "error", "content": str(e)}, ensure_ascii=False)
                     return
@@ -120,16 +169,41 @@ class NarrativeEngine:
                 # Phase 1.5: Check for events
                 if self.events:
                     world_snap = self.world.get_full_snapshot()
+                    mastered_set = mastered if is_structured else await self._get_mastered_points(uow)
+                    char_states = {}
+                    if self.emotion:
+                        char_states = self.emotion.get_all_states()
                     event_list = self.events.check_time_events(world_snap.get("current_day", 1))
+                    event_list += self.events.check_condition_events(
+                        world_state=world_snap,
+                        mastered_points=mastered_set,
+                        character_states=char_states,
+                    )
+                    random_event = self.events.check_random_events()
+                    if random_event:
+                        event_list.append(random_event)
                     for event in event_list:
-                        yield json.dumps({
-                            "type": "event.trigger",
-                            "payload": {
+                        event_payload = {
+                            "event_id": event.event_id,
+                            "title": event.name,
+                            "description": event.description,
+                            "scene_change": event.scene_change,
+                        }
+                        if hasattr(event, "options") and event.options:
+                            event_payload["options"] = event.options
+                            narrative_choices_data = {
                                 "event_id": event.event_id,
                                 "title": event.name,
                                 "description": event.description,
-                                "scene_change": event.scene_change,
-                            },
+                                "options": event.options,
+                            }
+                            yield json.dumps({
+                                "type": "narrative.options",
+                                "payload": narrative_choices_data,
+                            }, ensure_ascii=False)
+                        yield json.dumps({
+                            "type": "event.trigger",
+                            "payload": event_payload,
                         }, ensure_ascii=False)
                         if event.scene_change:
                             new_scene = self.world.switch_scene(event.scene_change)
@@ -341,7 +415,23 @@ class NarrativeEngine:
         character_id: str,
         history: list[dict],
         rag_context: str = "",
+        point_data: dict = None,
+        emotion_summary: str = "",
     ) -> list[dict]:
+        if point_data:
+            scene = self.world.get_current_scene()
+            return self.teaching.build_teaching_prompt(
+                point_data=point_data,
+                character_id=character_id,
+                scene_id=scene.id,
+                allowed_actions=scene.allowed_actions,
+                emotion_summary=emotion_summary or self._mood_to_description(
+                    self.emotion.get_state(character_id).mood if self.emotion and self.emotion.get_state(character_id) else 0.7
+                ),
+                history=history,
+                rag_context=rag_context,
+            )
+
         character = self.characters.get_character(character_id)
         system = "你是一位苏格拉底式教学助手，通过提问引导学生自主思考。"
 
@@ -432,4 +522,25 @@ class NarrativeEngine:
             },
             "activeEvents": [],
             "narrativeChoices": None,
+        }
+
+    async def activate_syllabus(self, material_id: int) -> dict:
+        async with UnitOfWork() as uow:
+            syllabus = await uow.syllabuses.get_by_material_id(material_id)
+            if not syllabus:
+                return {"error": f"Syllabus not found for material_id={material_id}"}
+
+            content = syllabus.content or {}
+            syllabus_name = content.get("course", {}).get("name", content.get("name", f"教材 {material_id}"))
+            total_days = content.get("total_days", content.get("course", {}).get("total_days", 0))
+
+        self.graph.load_from_syllabus_content(content)
+        self.world.activate_syllabus(material_id, syllabus_name, total_days)
+
+        return {
+            "material_id": material_id,
+            "syllabus_name": syllabus_name,
+            "total_days": self.world._total_days,
+            "knowledge_points": len(self.graph.get_all_points()),
+            "modules": len(self.graph._module_order),
         }

@@ -450,3 +450,23 @@ async def get_progress_summary(request: Request):
         },
         "point_details": point_details,
     }
+
+
+class ActivateSyllabusRequest(BaseModel):
+    material_id: int
+
+
+@router.post("/activate")
+@limiter.limit("10/minute")
+async def activate_syllabus(request: Request, body: ActivateSyllabusRequest):
+    from app.api.v1.ws import get_narrative_engine
+
+    engine = get_narrative_engine()
+    if not engine:
+        raise HTTPException(status_code=503, detail="叙事引擎未初始化")
+
+    result = await engine.activate_syllabus(body.material_id)
+    if "error" in result:
+        raise HTTPException(status_code=404, detail=result["error"])
+
+    return result

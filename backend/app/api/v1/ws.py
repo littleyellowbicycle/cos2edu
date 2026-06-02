@@ -223,6 +223,38 @@ async def websocket_endpoint(
                         },
                     }, ensure_ascii=False))
 
+            elif msg_type == "syllabus.activate":
+                material_id = payload.get("material_id")
+                if not material_id:
+                    await websocket.send_text(json.dumps({
+                        "type": "error",
+                        "content": "缺少 material_id",
+                    }))
+                    continue
+                engine = get_narrative_engine()
+                if engine:
+                    result = await engine.activate_syllabus(material_id)
+                    if "error" in result:
+                        await websocket.send_text(json.dumps({
+                            "type": "error",
+                            "content": result["error"],
+                        }))
+                    else:
+                        snapshot = await engine.get_full_snapshot()
+                        await websocket.send_text(json.dumps({
+                            "type": "syllabus.activated",
+                            "payload": result,
+                        }, ensure_ascii=False))
+                        await websocket.send_text(json.dumps({
+                            "type": "state.full",
+                            "payload": snapshot,
+                        }, ensure_ascii=False))
+                else:
+                    await websocket.send_text(json.dumps({
+                        "type": "error",
+                        "content": "叙事引擎未初始化",
+                    }))
+
             elif msg_type == "syllabus.reject":
                 material_id = payload.get("material_id")
                 if material_id:

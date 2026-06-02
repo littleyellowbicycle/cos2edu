@@ -148,6 +148,13 @@ class NarrativeWebSocket {
     })
   }
 
+  activateSyllabus(materialId) {
+    this.send({
+      type: 'syllabus.activate',
+      payload: { material_id: materialId },
+    })
+  }
+
   generateAssessment(pointId, characterId) {
     this.send({
       type: 'assessment.generate',
@@ -200,6 +207,7 @@ export function useWebSocket() {
     requestStateSync: wsInstance.requestStateSync.bind(wsInstance),
     confirmSyllabus: wsInstance.confirmSyllabus.bind(wsInstance),
     rejectSyllabus: wsInstance.rejectSyllabus.bind(wsInstance),
+    activateSyllabus: wsInstance.activateSyllabus.bind(wsInstance),
     generateAssessment: wsInstance.generateAssessment.bind(wsInstance),
     submitAssessment: wsInstance.submitAssessment.bind(wsInstance),
     advanceTime: wsInstance.advanceTime.bind(wsInstance),

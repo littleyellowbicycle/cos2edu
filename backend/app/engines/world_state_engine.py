@@ -28,7 +28,9 @@ class WorldStateEngine:
         self._current_scene: str = "classroom"
         self._global_flags: dict = {}
         self._narrative_phase: str = "prologue"
-        self._total_days: int = 90
+        self._total_days: int = 15
+        self._active_syllabus_id: Optional[int] = None
+        self._active_syllabus_name: str = ""
 
         self._load_world_settings()
 
@@ -41,7 +43,7 @@ class WorldStateEngine:
         try:
             data = yaml.safe_load(settings_file.read_text(encoding="utf-8"))
             world = data.get("world", {})
-            self._total_days = world.get("time_scale", 1) * 90
+            self._total_days = world.get("time_scale", 1) * world.get("base_days", 15)
             self._current_scene = world.get("start_scene", "classroom")
 
             for scene_data in data.get("scenes", []):
@@ -116,10 +118,22 @@ class WorldStateEngine:
             "narrative_phase": self._narrative_phase,
             "global_flags": dict(self._global_flags),
             "progress_percent": round(self._current_day / self._total_days * 100, 1),
+            "active_syllabus_id": self._active_syllabus_id,
+            "active_syllabus_name": self._active_syllabus_name,
         }
 
     def get_all_scenes(self) -> list[SceneInfo]:
         return list(self._scenes.values())
+
+    def activate_syllabus(self, syllabus_id: int, syllabus_name: str, total_days: int) -> None:
+        self._active_syllabus_id = syllabus_id
+        self._active_syllabus_name = syllabus_name
+        if total_days and total_days > 0:
+            self._total_days = total_days
+        self._current_day = 1
+        self._narrative_phase = "prologue"
+        self._global_flags = {}
+        logger.info(f"WorldStateEngine activated syllabus: {syllabus_name} (id={syllabus_id}, total_days={self._total_days})")
 
     def reload(self, content_dir: str) -> None:
         self._content_dir = Path(content_dir)

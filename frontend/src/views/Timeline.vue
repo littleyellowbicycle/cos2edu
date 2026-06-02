@@ -2,7 +2,10 @@
   <div class="timeline-page">
     <div class="timeline-header">
       <h1>&#x1F4C5; 学习时间线</h1>
-      <p class="subtitle">第 {{ narrative.world.currentDay }} 天 / 共 {{ narrative.world.totalDays }} 天</p>
+      <p class="subtitle">
+        第 {{ narrative.world.currentDay }} 天 / 共 {{ narrative.world.totalDays }} 天
+        <span v-if="narrative.world.activeSyllabusName" class="active-syllabus-badge">{{ narrative.world.activeSyllabusName }}</span>
+      </p>
     </div>
 
     <div class="progress-bar-container">
@@ -174,6 +177,18 @@ function syncState() {
 .subtitle {
   color: var(--color-text-muted);
   font-size: 14px;
+}
+
+.active-syllabus-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #1565c0;
+  background: #e3f2fd;
+  border-radius: 12px;
+  vertical-align: middle;
 }
 
 .progress-bar-container {

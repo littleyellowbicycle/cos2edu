@@ -102,6 +102,30 @@
             </div>
             <button class="btn-continue" @click="continueAfterAssessment">继续学习</button>
           </div>
+
+          <Transition name="event-slide">
+            <div v-if="activeEventNotification" class="event-notification" role="alert" aria-live="assertive">
+              <div class="event-notification-header">
+                <span class="event-notification-icon">&#x1F4E2;</span>
+                <h4>{{ activeEventNotification.title }}</h4>
+                <button class="event-close" @click="dismissEvent" aria-label="关闭通知">&times;</button>
+              </div>
+              <p class="event-description">{{ activeEventNotification.description }}</p>
+              <div v-if="activeEventNotification.options && activeEventNotification.options.length > 0" class="event-options">
+                <button
+                  v-for="opt in activeEventNotification.options"
+                  :key="opt.id"
+                  class="event-option-btn"
+                  @click="chooseNarrativeOption(opt.id)"
+                >
+                  {{ opt.text }}
+                </button>
+              </div>
+              <div v-else class="event-actions">
+                <button class="event-dismiss-btn" @click="dismissEvent">知道了</button>
+              </div>
+            </div>
+          </Transition>
         </div>
 
         <div class="input-area">
@@ -385,6 +409,24 @@ const allQuestionsAnswered = computed(() => {
   })
 })
 
+const activeEventNotification = ref(null)
+
+function dismissEvent() {
+  activeEventNotification.value = null
+}
+
+function chooseNarrativeOption(optionId) {
+  if (!activeEventNotification.value) return
+  ws.send({
+    type: 'action.choose',
+    payload: {
+      event_id: activeEventNotification.value.event_id,
+      option_id: optionId,
+    },
+  })
+  activeEventNotification.value = null
+}
+
 const masteryStatusLabel = computed(() => {
   const s = assessmentResultData.value?.status
   if (s === 'mastered') return '已掌握'
@@ -489,7 +531,18 @@ onMounted(async () => {
   wsUnsubFns.push(ws.on('event.trigger', (msg) => {
     if (msg.payload) {
       narrativeStore.activeEvents.push(msg.payload)
+      activeEventNotification.value = msg.payload
     }
+  }))
+  wsUnsubFns.push(ws.on('narrative.options', (msg) => {
+    if (msg.payload) {
+      narrativeStore.narrativeChoices = msg.payload
+      activeEventNotification.value = msg.payload
+    }
+  }))
+  wsUnsubFns.push(ws.on('event.resolved', () => {
+    activeEventNotification.value = null
+    narrativeStore.narrativeChoices = null
   }))
   wsUnsubFns.push(ws.on('state.full', (msg) => {
     narrativeStore.overwriteState(msg.payload)
@@ -883,6 +936,135 @@ function formatDate(dateStr) {
 
 .btn-continue:hover {
   background: var(--color-accent);
+}
+
+.event-notification {
+  margin: 16px 0;
+  padding: 20px;
+  background: linear-gradient(135deg, #fff8e1 0%, #fff3e0 100%);
+  border: 2px solid #ff9800;
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(255, 152, 0, 0.15);
+}
+
+.event-notification-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.event-notification-header h4 {
+  flex: 1;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #e65100;
+}
+
+.event-notification-icon {
+  font-size: 20px;
+}
+
+.event-close {
+  background: none;
+  border: none;
+  font-size: 20px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.event-close:hover {
+  color: var(--color-ink);
+}
+
+.event-description {
+  margin: 8px 0 14px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--color-text);
+}
+
+.event-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.event-option-btn {
+  display: block;
+  width: 100%;
+  padding: 12px 16px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  background: white;
+  border: 2px solid #ff9800;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: #e65100;
+}
+
+.event-option-btn:hover {
+  background: #fff3e0;
+  border-color: #f57c00;
+  transform: translateX(4px);
+}
+
+.event-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.event-dismiss-btn {
+  padding: 8px 20px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  background: #ff9800;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.event-dismiss-btn:hover {
+  background: #f57c00;
+}
+
+.event-slide-enter-active {
+  animation: eventSlideIn 0.4s ease;
+}
+
+.event-slide-leave-active {
+  animation: eventSlideOut 0.3s ease;
+}
+
+@keyframes eventSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes eventSlideOut {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.95);
+  }
 }
 
 .btn-sidebar {

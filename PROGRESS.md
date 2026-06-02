@@ -78,9 +78,9 @@
 
 ---
 
-## Phase 4.0 — 打磨与增强 🔧
+## Phase 4.0 — 打磨与增强 ✅
 
-> 状态：进行中
+> 状态：已完成
 
 - [x] 对话历史搜索与管理增强
   - 后端: ConversationRepository.search() 支持关键词+角色ID搜索、MessageSearchRepository 全文搜索
@@ -99,6 +99,24 @@
   - 后端: POST /content/reload — 热重载 KnowledgeGraph, CharacterEngine, WorldStateEngine, EmotionEngine, EventEngine
   - 前端: YamlEditor.vue 中"热重载"按钮
   - WorldStateEngine.reload(), EmotionEngine.reload(), EventEngine.reload() 方法
+- [x] 事件通知弹窗 + 叙事选项 UI
+  - 后端: EventEngine 事件定义增加 options 字段，TriggeredEvent 携带选项数据
+  - 后端: NarrativeEngine 发送 narrative.options WS 事件（含选项列表）
+  - 前端: Chat.vue 事件通知弹窗组件（含动画过渡）
+  - 前端: 叙事选项按钮 UI，用户选择后发送 action.choose WS 消息
+  - 前端: 监听 narrative.options / event.trigger / event.resolved 事件
+- [x] 大纲编辑器（拖拽排列知识点、修改依赖）
+  - 前端: Curriculum.vue 新增"编辑"视图模式
+  - 拖拽排序知识点（HTML5 Drag & Drop API）
+  - 修改知识点名称、难度、核心概念
+  - 添加/移除前置依赖关系
+  - 保存修改通过 YAML 编辑 API 写入文件并触发热重载
+- [x] NarrativeEngine 使用 ContextBudget
+  - handle_chat_message 改为使用 TeachingEngine.build_teaching_prompt()（含 ContextBudget）
+  - 结构化模式下完整利用 ContextBudget 的 token 预算分配、<rule> 场景约束
+  - 非结构化模式保留简化 prompt 构建
+  - RAG 上下文、情感摘要注入到 prompt 构建流程
+  - 直接使用 LLMProvider.chat_stream 替代 ChatService.chat_stream
 - [⏭] ~~国际化 i18n~~ — 单用户桌面应用、中文目标用户，暂不做
 
 ---
@@ -140,3 +158,8 @@
 | YAML 编辑 | API 读写 + 自动备份 | 保存前 YAML 语法校验，.bak 回滚 |
 | 角色创建 | YAML 模板 + 向导 UI | 4 模板，创建后自动热加载到引擎 |
 | 热重载 | POST /content/reload | 不重启进程重新加载所有 YAML 内容到内存 |
+| 事件通知 | WS narrative.options + 弹窗 UI | 事件触发时推送选项，用户选择后发送 action.choose |
+| 大纲编辑 | 拖拽排序 + 依赖编辑 | HTML5 Drag & Drop，保存通过 YAML API + 热重载 |
+| ContextBudget 集成 | TeachingEngine.build_teaching_prompt | 结构化模式走 ContextBudget，非结构化走简化 prompt |
+| 教材-大纲-时间线绑定 | syllabus.activate | 一个教材=一个学习旅程，切换教材重载KG+时间线 |
+| 默认学习周期 | 15天（原90天） | settings.yaml base_days + syllabus.yaml total_days |

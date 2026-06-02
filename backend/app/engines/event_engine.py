@@ -13,13 +13,14 @@ logger = get_logger(__name__)
 class EventDefinition:
     id: str
     name: str
-    event_type: str  # time_based, condition_based, random
+    event_type: str
     trigger_day: Optional[int] = None
     condition: Optional[str] = None
     description: str = ""
     description_template: str = ""
     scene_change: Optional[str] = None
     probability: float = 0.05
+    options: list = field(default_factory=list)
 
 
 @dataclass
@@ -60,6 +61,7 @@ class EventEngine:
                     description_template=evt_data.get("description_template", ""),
                     scene_change=evt_data.get("scene_change"),
                     probability=0.05 if evt_data.get("condition") and "random" in evt_data.get("condition", "") else 1.0,
+                    options=evt_data.get("options", []),
                 ))
             logger.info(f"EventEngine loaded: {len(self._events)} events")
         except Exception as e:
@@ -78,6 +80,7 @@ class EventEngine:
                         name=event.name,
                         description=event.description or event.description_template,
                         scene_change=event.scene_change,
+                        options=event.options,
                     ))
                     self._triggered_today.add(event.id)
 
@@ -109,6 +112,7 @@ class EventEngine:
                     name=event.name,
                     description=description,
                     scene_change=event.scene_change,
+                    options=event.options,
                 ))
                 self._triggered_today.add(event.id)
 
@@ -129,6 +133,7 @@ class EventEngine:
                     name=event.name,
                     description=event.description,
                     scene_change=event.scene_change,
+                    options=event.options,
                 )
         return None
 

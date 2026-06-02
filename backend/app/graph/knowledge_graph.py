@@ -123,3 +123,45 @@ class KnowledgeGraph:
 
     def reload(self, modules_dir: str) -> None:
         self.load_from_yaml(modules_dir)
+
+    def load_from_syllabus_content(self, syllabus_content: dict) -> None:
+        self._graph.clear()
+        self._point_meta.clear()
+        self._module_order.clear()
+
+        modules = syllabus_content.get("modules", [])
+        for mod_idx, mod in enumerate(modules):
+            module_id = mod.get("id", f"module_{mod_idx}")
+            module_name = mod.get("name", module_id)
+            self._module_order[module_id] = mod.get("order", mod_idx)
+
+            module_prereqs = mod.get("prerequisites", [])
+            for point in mod.get("knowledge_points", []):
+                pid = point.get("id", "")
+                if not pid:
+                    continue
+
+                point_module_prereqs = []
+                for mp in module_prereqs:
+                    if mp in self._point_meta:
+                        point_module_prereqs.append(mp)
+
+                explicit_prereqs = set(point.get("prerequisites", []))
+                all_prereqs = explicit_prereqs | set(point_module_prereqs)
+
+                self._graph[pid] = all_prereqs
+                self._point_meta[pid] = PointMeta(
+                    id=pid,
+                    name=point.get("name", pid),
+                    module_id=module_id,
+                    module_name=module_name,
+                    difficulty=point.get("difficulty", 1),
+                    estimated_minutes=point.get("estimated_minutes", 30),
+                    key_concepts=point.get("key_concepts", []),
+                    teaching_hints=point.get("teaching_hints", {}),
+                    suggested_questions=point.get("suggested_questions", []),
+                    exercises=point.get("exercises", []),
+                    prerequisites=list(explicit_prereqs),
+                )
+
+        logger.info(f"KnowledgeGraph loaded from syllabus: {len(self._point_meta)} points, {len(self._module_order)} modules")

@@ -140,6 +140,12 @@ class EmotionEngine:
         else:
             return f"{name}保持着专注的神情"
 
+    def get_state(self, character_id: str):
+        from dataclasses import dataclass as _dc
+        mood = self._mood_state.get(character_id, 0.7)
+        trust = self._trust_state.get(character_id, 0.5)
+        return type("EmotionState", (), {"mood": mood, "trust": trust})()
+
     def get_all_states(self) -> dict:
         result = {}
         for cid in self._mood_state:
