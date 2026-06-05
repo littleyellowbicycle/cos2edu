@@ -137,7 +137,15 @@
 |--------|------|------|
 | 🔴 高 | vite build 报错 @vitejs/plugin-vue resolve | ✅ 已修复（node_modules 重装） |
 | 🟡 中 | RAG 使用哈希伪嵌入，检索精度有限 | ✅ Phase 2.0 升级为三级 fallback |
+| 🟡 中 | EventEngine 缺少优先级评估 | ❌ 事件按 YAML 加载顺序返回，无 priority 字段和排序逻辑 |
+| 🟡 中 | PDF fallback 库名错误 | ❌ PROGRESS 写 PyMuPDF，实际代码用 PyPDF2 |
+| 🟡 中 | Material pipeline 卡在 parsing 状态 | ✅ 已修复：process_material 从未被调用+repair-stuck 端点 |
+| 🟡 中 | 历史对话加载缺失 | ✅ 已修复：loadConversation 未赋值 messages |
+| 🟡 中 | RAG 未接入 REST 聊天路径 | ✅ 已修复：ChatService._build_messages 优先 RAG 检索 |
+| 🟡 中 | 后端启动卡住 30s+ | ✅ 已修复：FAISS/numpy/fastembed 懒加载 |
 | 🟢 低 | EmotionEngine mood 判断基于关键词，未使用 LLM | 后续优化 |
+| 🟢 低 | 考核掌握度进度条 | ⚠️ Chat.vue 显示为文字 XX%，非可视进度条组件（Dashboard 有 progress bar） |
+| 🟢 低 | WS 协议 schema 数量 | ⚠️ PROGRESS 写 20+，实际 Pydantic schema 14 个（含服务端推送共 27 种消息类型） |
 
 ---
 
