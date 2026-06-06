@@ -42,6 +42,8 @@ export const useNarrativeStore = defineStore('narrative', () => {
 
   const lastSyncAt = ref(null)
 
+  const generativeComponents = ref([])
+
   function overwriteState(snapshot) {
     if (snapshot.world) {
       Object.assign(world, snapshot.world)
@@ -172,6 +174,27 @@ export const useNarrativeStore = defineStore('narrative', () => {
     progress.completedPoints = 0
     activeEvents.value = []
     narrativeChoices.value = null
+    generativeComponents.value = []
+  }
+
+  function addGenerativeComponent(comp) {
+    const idx = generativeComponents.value.findIndex(c => c.id === comp.id)
+    if (idx >= 0) {
+      generativeComponents.value[idx] = comp
+    } else {
+      generativeComponents.value.push(comp)
+    }
+  }
+
+  function removeGenerativeComponent(compId) {
+    generativeComponents.value = generativeComponents.value.filter(c => c.id !== compId)
+  }
+
+  function updateGenerativeComponent(compId, newProps) {
+    const comp = generativeComponents.value.find(c => c.id === compId)
+    if (comp) {
+      Object.assign(comp.props, newProps)
+    }
   }
 
   return {
@@ -184,6 +207,7 @@ export const useNarrativeStore = defineStore('narrative', () => {
     assessmentResult,
     connectionState,
     lastSyncAt,
+    generativeComponents,
     overwriteState,
     updateEmotion,
     updateProgress,
@@ -195,5 +219,8 @@ export const useNarrativeStore = defineStore('narrative', () => {
     applyTimeAdvance,
     setConnectionState,
     reset,
+    addGenerativeComponent,
+    removeGenerativeComponent,
+    updateGenerativeComponent,
   }
 })

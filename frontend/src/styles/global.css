@@ -1,30 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Noto+Serif+SC:wght@400;600;700&family=Space+Mono:wght@400;700&display=swap');
-
-:root {
-  --bg-deep: #0d0c0a;
-  --bg-surface: #151412;
-  --bg-elevated: #1c1a17;
-  --bg-hover: #252220;
-
-  --amber-glow: #d4a574;
-  --amber-bright: #e8c088;
-  --amber-dim: #a67c4e;
-  --amber-dark: #6b4c32;
-
-  --text-primary: #e8e4dc;
-  --text-secondary: #a8a090;
-  --text-muted: #6b6560;
-
-  --border-subtle: rgba(212, 165, 116, 0.12);
-  --border-accent: rgba(212, 165, 116, 0.3);
-
-  --shadow-glow: 0 0 40px rgba(212, 165, 116, 0.08);
-  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.4);
-
-  --font-display: 'Cormorant Garamond', 'Noto Serif SC', serif;
-  --font-body: 'Noto Serif SC', serif;
-  --font-mono: 'Space Mono', monospace;
-}
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Noto+Serif+SC:wght@400;600;700&family=Source+Sans+3:wght@300;400;600;700&family=Space+Mono:wght@400;700&display=swap');
+@import './variables.css';
 
 *, *::before, *::after {
   box-sizing: border-box;
@@ -162,7 +137,7 @@ body {
 }
 
 .el-input__inner::placeholder {
-  color: var(--text-muted) !important;
+  color: var(--text-muted-dark) !important;
 }
 
 .el-input__wrapper:hover {

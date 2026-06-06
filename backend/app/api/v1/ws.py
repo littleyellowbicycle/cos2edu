@@ -3,12 +3,14 @@ from typing import Optional
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 
 from app.core.logging_config import get_logger
+from app.engines.ui_orchestrator import UIOrchestrator
 
 logger = get_logger(__name__)
 
 router = APIRouter()
 
 _narrative_engine = None
+_ui_orchestrator = UIOrchestrator()
 
 
 def set_narrative_engine(engine):
@@ -287,6 +289,12 @@ async def websocket_endpoint(
                     "type": "error",
                     "content": f"未知的消息类型: {msg_type}",
                 }))
+
+        elif msg_type == "ui.interact":
+            component_id = payload.get("component_id", "")
+            action = payload.get("action", "")
+            value = payload.get("value", "")
+            logger.info(f"UI interact: component={component_id}, action={action}")
 
     except WebSocketDisconnect:
         logger.info(f"WebSocket disconnected: {client_id}")

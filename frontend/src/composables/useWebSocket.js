@@ -185,6 +185,13 @@ class NarrativeWebSocket {
     this.send({ type: 'ping' })
   }
 
+  sendUIInteract(componentId, action, value) {
+    this.send({
+      type: 'ui.interact',
+      payload: { component_id: componentId, action, value },
+    })
+  }
+
   disconnect() {
     if (this.ws) {
       this.ws.close()
@@ -214,5 +221,6 @@ export function useWebSocket() {
     on: wsInstance.on.bind(wsInstance),
     off: wsInstance.off.bind(wsInstance),
     ping: wsInstance.ping.bind(wsInstance),
+    sendUIInteract: wsInstance.sendUIInteract.bind(wsInstance),
   }
 }

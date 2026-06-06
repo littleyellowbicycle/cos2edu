@@ -172,3 +172,28 @@ class TimeAdvanceMessage(BaseModel):
 class TimeAdvancedEvent(BaseModel):
     type: str = "time.advanced"
     payload: dict = Field(..., description="含 current_day, total_days, narrative_phase, current_scene, progress_percent")
+
+
+class UIRenderEvent(BaseModel):
+    type: str = "ui.render"
+    id: str = ""
+    timestamp: str = ""
+    components: list[dict] = []
+    metadata: dict = {}
+
+
+class UIDestroyEvent(BaseModel):
+    type: str = "ui.destroy"
+    component_ids: list[str] = []
+
+
+class UIUpdateEvent(BaseModel):
+    type: str = "ui.update"
+    component_id: str = ""
+    props: dict = {}
+
+
+class UIInteractMessage(BaseModel):
+    type: str = "ui.interact"
+    payload: dict = Field(..., description="含 component_id, action, value")
+    id: Optional[str] = None

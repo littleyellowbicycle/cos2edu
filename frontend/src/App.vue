@@ -32,25 +32,7 @@ function retry() {
 </script>
 
 <style>
-:root {
-  --font-display: 'Cormorant Garamond', Georgia, serif;
-  --font-body: 'Source Sans 3', -apple-system, BlinkMacSystemFont, sans-serif;
-  
-  --color-bg: #FAF8F5;
-  --color-bg-warm: #F5F1EB;
-  --color-surface: #FFFFFF;
-  --color-text: #1A1A1A;
-  --color-text-muted: #6B6B6B;
-  --color-accent: #8B4513;
-  --color-accent-light: #C4956A;
-  --color-border: #E5E0D8;
-  --color-ink: #2C2416;
-  --color-error: #C75050;
-  
-  --shadow-sm: 0 1px 3px rgba(44, 36, 22, 0.06);
-  --shadow-md: 0 4px 12px rgba(44, 36, 22, 0.08);
-  --shadow-lg: 0 12px 40px rgba(44, 36, 22, 0.12);
-}
+@import './styles/variables.css';
 
 * {
   margin: 0;
