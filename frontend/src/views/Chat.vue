@@ -176,6 +176,8 @@
         </div>
       </aside>
     </div>
+    <DynamicRenderer slot="overlay" />
+    <DynamicRenderer slot="panel" />
   </div>
 </template>
 
@@ -190,6 +192,7 @@ import mermaid from 'mermaid'
 import { marked } from 'marked'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { useNarrativeStore } from '@/stores/narrative'
+import DynamicRenderer from '@/components/generative/DynamicRenderer.vue'
 
 const emojiSectionRegex = /^([\p{Emoji_Presentation}\p{Extended_Pictographic}\u{1F300}-\u{1F9FF}]+)\s+(.+)$/u
 

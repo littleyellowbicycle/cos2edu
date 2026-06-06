@@ -11,6 +11,7 @@ from app.engines.event_engine import EventEngine, TriggeredEvent
 from app.engines.assessment_engine import AssessmentEngine, AssessmentResult, Quiz
 from app.state.state_manager import StateManager
 from app.services.chat_service import ChatService, LLMProvider
+from app.engines.ui_orchestrator import UIOrchestrator
 from app.services.rag_service import get_rag_service
 from app.repositories.unit_of_work import UnitOfWork
 from app.core.logging_config import get_logger
@@ -41,6 +42,7 @@ class NarrativeEngine:
         self.events = event_engine
         self.assessment = assessment_engine or AssessmentEngine()
         self.rag = get_rag_service()
+        self._ui_orchestrator = UIOrchestrator()
         self._message_counts: dict[int, int] = {}
         self._active_quizzes: dict[str, "Quiz"] = {}
 
@@ -125,9 +127,21 @@ class NarrativeEngine:
                             "group_id": getattr(model_config, "group_id", None),
                         }
                     llm = LLMProvider(config_dict)
-                    async for chunk in llm.chat_stream(prompt_messages):
-                        full_response += chunk if not chunk.startswith("data:") else ""
-                        yield json.dumps({"type": "chat.token", "content": chunk}, ensure_ascii=False)
+                    tools = None
+                    ui_orchestrator = getattr(self, '_ui_orchestrator', None)
+                    if ui_orchestrator:
+                        tools = ui_orchestrator.TOOL_DEFINITIONS
+
+                    async for event in llm.chat_stream(prompt_messages, tools=tools):
+                        if event["type"] == "text":
+                            chunk = event["content"]
+                            full_response += chunk
+                            yield json.dumps({"type": "chat.token", "content": chunk}, ensure_ascii=False)
+                        elif event["type"] == "tool_calls" and ui_orchestrator:
+                            ui_components = ui_orchestrator.convert_tool_calls(event["tool_calls"])
+                            if ui_components:
+                                ui_msg = ui_orchestrator.build_ui_render_message(ui_components)
+                                yield json.dumps(ui_msg, ensure_ascii=False)
 
                     async with UnitOfWork() as uow_save:
                         await uow_save.messages.create({

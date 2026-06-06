@@ -134,33 +134,86 @@ class LLMProvider:
             logger.error(f"LLM chat error [{self.provider}]: {str(e)}")
             raise
 
-    async def chat_stream(self, messages: List[Dict[str, str]]) -> AsyncIterator[str]:
+    async def chat_stream(self, messages: List[Dict[str, str]], tools: Optional[List[Dict]] = None) -> AsyncIterator[dict]:
         self._validate_config()
         client = self._get_client()
-        
+
         try:
             if self.provider == "anthropic":
                 ant_messages = [{"role": m["role"] if m["role"] != "system" else "user", "content": m["content"]} for m in messages]
                 system_msg = next((m["content"] for m in messages if m["role"] == "system"), None)
-                stream = await client.messages.create(
-                    model=self.model_name,
-                    max_tokens=1024,
-                    system=system_msg,
-                    messages=ant_messages,
-                    stream=True
-                )
+
+                anthropic_tools = []
+                if tools:
+                    for t in tools:
+                        func = t.get("function", t.get("function", {}))
+                        anthropic_tools.append({
+                            "name": func.get("name", ""),
+                            "description": func.get("description", ""),
+                            "input_schema": func.get("parameters", {"type": "object", "properties": {}}),
+                        })
+
+                create_kwargs = {
+                    "model": self.model_name,
+                    "max_tokens": 1024,
+                    "messages": ant_messages,
+                    "stream": True,
+                }
+                if system_msg:
+                    create_kwargs["system"] = system_msg
+                if anthropic_tools:
+                    create_kwargs["tools"] = anthropic_tools
+
+                stream = await client.messages.create(**create_kwargs)
                 async for chunk in stream:
-                    if chunk.type == "content_block_delta" and hasattr(chunk, 'delta'):
-                        yield chunk.delta.text
+                    if chunk.type == "content_block_delta" and hasattr(chunk, 'delta') and hasattr(chunk.delta, 'text'):
+                        yield {"type": "text", "content": chunk.delta.text}
+                    elif chunk.type == "content_block_start" and hasattr(chunk, 'content_block') and chunk.content_block.type == "tool_use":
+                        yield {"type": "tool_calls", "tool_calls": [{
+                            "id": chunk.content_block.id,
+                            "name": chunk.content_block.name,
+                            "arguments": "",
+                        }]}
+                    elif chunk.type == "content_block_delta" and hasattr(chunk, 'delta') and chunk.delta.type == "input_json_delta":
+                        yield {"type": "tool_call_delta", "id": "", "arguments_delta": chunk.delta.partial_json}
             else:
-                stream = await client.chat.completions.create(
-                    model=self.model_name,
-                    messages=messages,
-                    stream=True
-                )
+                create_kwargs = {
+                    "model": self.model_name,
+                    "messages": messages,
+                    "stream": True,
+                }
+                if tools:
+                    create_kwargs["tools"] = tools
+
+                stream = await client.chat.completions.create(**create_kwargs)
+
+                tool_calls_accumulator = {}
                 async for chunk in stream:
-                    if chunk.choices[0].delta.content:
-                        yield chunk.choices[0].delta.content
+                    delta = chunk.choices[0].delta if chunk.choices else None
+                    if delta and delta.content:
+                        yield {"type": "text", "content": delta.content}
+
+                    if delta and hasattr(delta, 'tool_calls') and delta.tool_calls:
+                        for tc in delta.tool_calls:
+                            idx = tc.index if hasattr(tc, 'index') and tc.index is not None else 0
+                            if idx not in tool_calls_accumulator:
+                                tool_calls_accumulator[idx] = {"id": "", "name": "", "arguments": ""}
+                            if hasattr(tc, 'id') and tc.id:
+                                tool_calls_accumulator[idx]["id"] = tc.id
+                            if hasattr(tc, 'function') and tc.function:
+                                if tc.function.name:
+                                    tool_calls_accumulator[idx]["name"] += tc.function.name
+                                if tc.function.arguments:
+                                    tool_calls_accumulator[idx]["arguments"] += tc.function.arguments
+
+                    finish_reason = chunk.choices[0].finish_reason if chunk.choices else None
+                    if finish_reason == "tool_calls" and tool_calls_accumulator:
+                        yield {
+                            "type": "tool_calls",
+                            "tool_calls": list(tool_calls_accumulator.values()),
+                        }
+                        tool_calls_accumulator.clear()
+
         except Exception as e:
             logger.error(f"LLM stream error [{self.provider}]: {str(e)}")
             raise
@@ -251,7 +304,12 @@ class ChatService:
         buffer = ""
         in_think = False
 
-        async for chunk in llm.chat_stream(messages):
+        async for event in llm.chat_stream(messages):
+            if event["type"] == "text":
+                chunk = event["content"]
+            else:
+                continue
+
             buffer += chunk
 
             while buffer:
