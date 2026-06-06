@@ -172,3 +172,66 @@
 | ContextBudget 集成 | TeachingEngine.build_teaching_prompt | 结构化模式走 ContextBudget，非结构化走简化 prompt |
 | 教材-大纲-时间线绑定 | syllabus.activate | 一个教材=一个学习旅程，切换教材重载KG+时间线 |
 | 默认学习周期 | 15天（原90天） | settings.yaml base_days + syllabus.yaml total_days |
+
+---
+
+## Phase 0-3 — 前端重构：事件驱动 + Generative UI ✅
+
+> Commit: 待提交 | 分支: `dynamic_front` | 状态：Phase 0~3 核心完成
+
+### Phase 0 — 基础设施 ✅
+- [x] TypeScript 配置（`tsconfig.json`, `allowJs: true`）
+- [x] 统一 CSS 变量（`variables.css`，暖色学术主题）
+- [x] ESLint + Prettier
+
+### Phase 1 — Generative UI 流水线 ✅
+- [x] `ComponentRegistry` + `validateProps`（min/max 校验）
+- [x] `DynamicRenderer.vue`：slot 分发（inline/overlay/panel），异步组件缓存，生命周期（persistent/ephemeral/sticky）
+- [x] `EmotionCard.vue` + `LoadingPlaceholder.vue` + `ErrorFallback.vue`
+- [x] `registry.ts` / `index.ts`：组件注册
+- [x] `useWebSocket.js`：`sendUIInteract()` 方法
+- [x] `narrative.js`：`generativeComponents` 状态
+- [x] `Chat.vue`：DynamicRenderer 插槽 + DOMPurify + connectionState
+- [x] 后端 `UIOrchestrator.py`：5 个 tool 定义 + TOOL_TO_COMPONENT 映射 + `convert_tool_calls()`
+- [x] `LLMProvider.chat_stream()`：tools 参数，AsyncIterator[dict]，tool_calls 累加
+- [x] `NarrativeEngine`：UIOrchestrator 集成
+- [x] `ws.py`：`ui.interact` 处理
+- [x] `ChatService.chat_stream()`（REST）：dict 事件格式
+- [x] 代码审计修复 8 个 Bug
+
+### Phase 2 — 核心 Generative 组件 ✅
+- [x] `QuizForm.vue`：选择题 + 开放题 + 结果展示，双路径兼容（WS + ui.render）
+- [x] `Timeline.vue`：垂直时间线（sidebar, sticky）
+- [x] `KnowledgeGraph.vue`：知识图谱（panel, 纯 CSS/SVG）
+- [x] `SceneCard.vue`：场景切换卡片（overlay, ephemeral）
+- [x] 后端 `_camel_case_props`：递归 snake_case → camelCase
+- [x] 考核面板从 Chat.vue 提取为 QuizForm（~40 行 HTML + ~30 行 JS + ~220 行 CSS）
+- [x] 3 个 Bug 修复（submitAssessment 空参数、assessmentAnswers 悬空引用、@interact 缺失）
+
+### Phase 3 — Chat.vue 组件提取 ✅
+- [x] `MarkdownContent.vue`：KaTeX + Mermaid + marked + DOMPurify（~750 行）
+- [x] `MessageBubble.vue`：消息气泡 + 复制操作（~170 行）
+- [x] `TypingIndicator.vue`：动画打字指示器（~120 行）
+- [x] Chat.vue 缩减：1402 行 → 905 行（-35%）
+- [x] 清理死代码：移除 `getAvatarDisplay`/`getAvatarStyle`/`formatTime`/`countWords` 等函数
+- [x] 清理死 CSS：移除 ~110 行消息结构 CSS
+- [x] `docs/重构质量审核日志.md`：包含每个批次的审核清单和 Bug 修复记录
+
+### 组件文件结构
+```
+frontend/src/components/
+├── chat/
+│   ├── MarkdownContent.vue    # 标记渲染（KaTeX + Mermaid + marked）
+│   ├── MessageBubble.vue      # 消息气泡
+│   └── TypingIndicator.vue    # 打字指示器
+└── generative/
+    ├── index.ts               # DynamicRenderer 注册表
+    ├── DynamicRenderer.vue     # 动态渲染器
+    ├── EmotionCard.vue         # 情感卡片 (inline)
+    ├── QuizForm.vue            # 测验表单 (inline)
+    ├── Timeline.vue            # 时间线 (sidebar)
+    ├── KnowledgeGraph.vue      # 知识图谱 (panel)
+    ├── SceneCard.vue           # 场景卡片 (overlay)
+    ├── LoadingPlaceholder.vue  # 加载占位
+    └── ErrorFallback.vue       # 错误回退
+```
