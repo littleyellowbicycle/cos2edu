@@ -68,45 +68,7 @@
             </div>
           </div>
 
-          <div v-if="assessmentQuiz" class="assessment-panel" role="region" aria-label="知识点测验">
-            <div class="assessment-header">
-              <span class="assessment-icon">&#9733;</span>
-              <h3>知识点测验：{{ assessmentQuiz.point_name }}</h3>
-            </div>
-            <div v-for="(q, qi) in assessmentQuiz.quiz?.questions || []" :key="qi" class="assessment-question">
-              <p class="question-text">{{ q.question_text }}</p>
-              <div v-if="q.question_type === 'choice'" class="question-options">
-                <label v-for="(opt, oi) in q.options" :key="oi" class="option-label"
-                  :class="{ 'option-selected': assessmentAnswers[qi] === opt }">
-                  <input type="radio" :name="`q-${qi}`" :value="opt" v-model="assessmentAnswers[qi]" />
-                  {{ opt }}
-                </label>
-              </div>
-              <div v-else class="question-open">
-                <textarea v-model="assessmentAnswers[qi]" placeholder="请输入你的答案..." rows="2"></textarea>
-              </div>
-            </div>
-            <button class="btn-submit-assessment" @click="submitAssessment" :disabled="!allQuestionsAnswered">
-              提交答案
-            </button>
-          </div>
-
-          <div v-if="assessmentResultData" class="assessment-result" role="region" aria-label="考核结果">
-            <div class="result-header" :class="{ 'result-passed': assessmentResultData.passed, 'result-failed': !assessmentResultData.passed }">
-              <span class="result-icon">{{ assessmentResultData.passed ? '&#10004;' : '&#10008;' }}</span>
-              <h3>{{ assessmentResultData.passed ? '考核通过！' : '继续努力' }}</h3>
-            </div>
-            <p class="result-feedback">{{ assessmentResultData.feedback }}</p>
-            <div class="result-stats">
-              <div class="mastery-progress-group">
-                <span class="mastery-label">掌握度</span>
-                <progress class="mastery-bar" :value="Math.round(assessmentResultData.mastery_level * 100)" max="100"></progress>
-                <span class="mastery-pct">{{ Math.round(assessmentResultData.mastery_level * 100) }}%</span>
-              </div>
-              <span>状态: {{ masteryStatusLabel }}</span>
-            </div>
-            <button class="btn-continue" @click="continueAfterAssessment">继续学习</button>
-          </div>
+          <QuizForm />
 
           <Transition name="event-slide">
             <div v-if="activeEventNotification" class="event-notification" role="alert" aria-live="assertive">
@@ -195,6 +157,7 @@ import DOMPurify from 'dompurify'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { useNarrativeStore } from '@/stores/narrative'
 import DynamicRenderer from '@/components/generative/DynamicRenderer.vue'
+import QuizForm from '@/components/generative/QuizForm.vue'
 
 const emojiSectionRegex = /^([\p{Emoji_Presentation}\p{Extended_Pictographic}\u{1F300}-\u{1F9FF}]+)\s+(.+)$/u
 
@@ -409,18 +372,6 @@ const currentScene = computed(() => narrativeStore.world.sceneName || '')
 
 let wsUnsubFns = []
 
-const assessmentQuiz = computed(() => narrativeStore.currentAssessment)
-const assessmentResultData = computed(() => narrativeStore.assessmentResult)
-const assessmentAnswers = ref({})
-const allQuestionsAnswered = computed(() => {
-  if (!assessmentQuiz.value?.quiz?.questions) return false
-  const questions = assessmentQuiz.value.quiz.questions
-  return questions.every((q, i) => {
-    const answer = assessmentAnswers.value[i]
-    return answer && String(answer).trim().length > 0
-  })
-})
-
 const activeEventNotification = ref(null)
 
 function dismissEvent() {
@@ -437,29 +388,6 @@ function chooseNarrativeOption(optionId) {
     },
   })
   activeEventNotification.value = null
-}
-
-const masteryStatusLabel = computed(() => {
-  const s = assessmentResultData.value?.status
-  if (s === 'mastered') return '已掌握'
-  if (s === 'learning') return '学习中'
-  if (s === 'review_needed') return '需要复习'
-  return s || ''
-})
-
-function submitAssessment() {
-  const quiz = assessmentQuiz.value
-  if (!quiz) return
-  const answers = (quiz.quiz?.questions || []).map((q, i) => ({
-    question: q,
-    answer: assessmentAnswers.value[i] || '',
-  }))
-  ws.submitAssessment(quiz.point_id, characterId.value, answers, conversationId.value)
-}
-
-function continueAfterAssessment() {
-  narrativeStore.clearAssessment()
-  assessmentAnswers.value = {}
 }
 
 function getAvatarDisplay() {
@@ -776,225 +704,6 @@ function formatDate(dateStr) {
   background: #ffebee;
   color: #c62828;
   border: 1px solid #ef9a9a;
-}
-
-.assessment-panel {
-  margin: 16px 0;
-  padding: 20px;
-  background: linear-gradient(135deg, #f3e5f5 0%, #e8eaf6 100%);
-  border: 2px solid #7c4dff;
-  border-radius: 12px;
-}
-
-.assessment-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 16px;
-}
-
-.assessment-header h3 {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--color-ink);
-  margin: 0;
-}
-
-.assessment-icon {
-  font-size: 22px;
-  color: #7c4dff;
-}
-
-.assessment-question {
-  margin-bottom: 16px;
-  padding: 12px;
-  background: white;
-  border-radius: 8px;
-  border: 1px solid var(--color-border);
-}
-
-.question-text {
-  font-weight: 500;
-  margin-bottom: 10px;
-  color: var(--color-ink);
-}
-
-.question-options {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.option-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s;
-  font-size: 14px;
-}
-
-.option-label:hover {
-  border-color: #7c4dff;
-  background: #f3e5f5;
-}
-
-.option-selected {
-  border-color: #7c4dff;
-  background: #e8daf5;
-}
-
-.question-open textarea {
-  width: 100%;
-  padding: 10px;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  font-family: var(--font-body);
-  font-size: 14px;
-  resize: vertical;
-}
-
-.btn-submit-assessment {
-  display: block;
-  width: 100%;
-  padding: 12px;
-  font-family: var(--font-body);
-  font-size: 15px;
-  font-weight: 600;
-  background: #7c4dff;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-.btn-submit-assessment:hover:not(:disabled) {
-  background: #651fff;
-}
-
-.btn-submit-assessment:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.assessment-result {
-  margin: 16px 0;
-  padding: 20px;
-  background: white;
-  border-radius: 12px;
-  border: 2px solid var(--color-border);
-}
-
-.result-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 12px;
-}
-
-.result-header.result-passed {
-  border-bottom: 2px solid #4caf50;
-}
-
-.result-header.result-failed {
-  border-bottom: 2px solid #ff9800;
-}
-
-.result-icon {
-  font-size: 24px;
-}
-
-.result-passed .result-icon {
-  color: #4caf50;
-}
-
-.result-failed .result-icon {
-  color: #ff9800;
-}
-
-.result-header h3 {
-  margin: 0;
-  font-size: 18px;
-}
-
-.result-feedback {
-  margin: 10px 0;
-  font-size: 15px;
-  line-height: 1.6;
-  color: var(--color-text);
-}
-
-.result-stats {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 12px 0;
-  font-size: 14px;
-  color: var(--color-text-muted);
-}
-
-.mastery-progress-group {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.mastery-label {
-  font-weight: 600;
-  min-width: 48px;
-}
-
-.mastery-bar {
-  flex: 1;
-  height: 14px;
-  border: 1px solid var(--color-border);
-  border-radius: 7px;
-  overflow: hidden;
-  background: var(--color-surface);
-}
-
-.mastery-bar::-webkit-progress-bar {
-  background: var(--color-surface);
-  border-radius: 7px;
-}
-
-.mastery-bar::-webkit-progress-value {
-  background: linear-gradient(90deg, #6c5ce7, #a29bfe);
-  border-radius: 7px;
-  transition: width 0.4s ease;
-}
-
-.mastery-bar::-moz-progress-bar {
-  background: linear-gradient(90deg, #6c5ce7, #a29bfe);
-  border-radius: 7px;
-}
-
-.mastery-pct {
-  font-weight: 700;
-  min-width: 36px;
-  text-align: right;
-  color: #6c5ce7;
-}
-
-.btn-continue {
-  padding: 10px 24px;
-  font-family: var(--font-body);
-  font-size: 14px;
-  font-weight: 600;
-  background: var(--color-ink);
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-.btn-continue:hover {
-  background: var(--color-accent);
 }
 
 .event-notification {

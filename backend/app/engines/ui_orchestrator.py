@@ -96,13 +96,16 @@ class UIOrchestrator:
                                 "type": "object",
                                 "properties": {
                                     "year": {"type": "number"},
+                                    "date": {"type": "string", "description": "日期文本（如'公元前221年'）"},
                                     "label": {"type": "string"},
+                                    "detail": {"type": "string", "description": "补充说明"},
                                 },
-                                "required": ["year", "label"],
+                                "required": ["label"],
                             },
                             "description": "时间线事件列表",
                         },
                         "title": {"type": "string", "description": "时间线标题"},
+                        "active_index": {"type": "integer", "description": "高亮事件索引（-1表示不高亮）", "minimum": -1},
                     },
                     "required": ["events"],
                 },
@@ -112,24 +115,35 @@ class UIOrchestrator:
             "type": "function",
             "function": {
                 "name": "show_quiz",
-                "description": "当需要检验学生理解时展示测验表单",
+                "description": "当需要检验学生理解时展示测验表单（支持多题）",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "point_id": {"type": "string", "description": "知识点ID"},
-                        "question_type": {
-                            "type": "string",
-                            "enum": ["choice", "short_answer", "true_false"],
-                            "description": "题目类型",
-                        },
-                        "question": {"type": "string", "description": "题目内容"},
-                        "options": {
+                        "point_name": {"type": "string", "description": "知识点名称"},
+                        "questions": {
                             "type": "array",
-                            "items": {"type": "string"},
-                            "description": "选项（仅选择题需要）",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "question_text": {"type": "string", "description": "题目内容"},
+                                    "question_type": {
+                                        "type": "string",
+                                        "enum": ["choice", "short_answer", "true_false"],
+                                        "description": "题目类型",
+                                    },
+                                    "options": {
+                                        "type": "array",
+                                        "items": {"type": "string"},
+                                        "description": "选项（仅选择题需要）",
+                                    },
+                                },
+                                "required": ["question_text", "question_type"],
+                            },
+                            "description": "题目列表",
                         },
                     },
-                    "required": ["point_id", "question_type", "question"],
+                    "required": ["point_id", "point_name"],
                 },
             },
         },
@@ -141,8 +155,35 @@ class UIOrchestrator:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "highlight": {"type": "string", "description": "高亮的知识点ID"},
+                        "highlight": {"type": "string", "description": "高亮的知识点名称"},
+                        "title": {"type": "string", "description": "图谱标题"},
                         "depth": {"type": "integer", "description": "展示的依赖深度", "default": 2},
+                        "prerequisites": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "id": {"type": "string"},
+                                    "name": {"type": "string"},
+                                    "mastered": {"type": "boolean"},
+                                },
+                                "required": ["name"],
+                            },
+                            "description": "前置知识列表",
+                        },
+                        "dependencies": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "id": {"type": "string"},
+                                    "name": {"type": "string"},
+                                },
+                                "required": ["name"],
+                            },
+                            "description": "后续知识列表",
+                        },
+                        "mastery_level": {"type": "number", "description": "当前知识点掌握度 (0-1)", "minimum": 0, "maximum": 1},
                     },
                     "required": ["highlight"],
                 },
@@ -157,11 +198,19 @@ class UIOrchestrator:
                     "type": "object",
                     "properties": {
                         "scene_id": {"type": "string", "description": "场景ID"},
+                        "scene_name": {"type": "string", "description": "场景名称"},
+                        "description": {"type": "string", "description": "场景描述"},
                         "transition": {
                             "type": "string",
                             "enum": ["fade", "slide", "instant"],
                             "description": "过渡效果",
                             "default": "fade",
+                        },
+                        "phase": {"type": "string", "description": "时间段（morning/afternoon/evening/night/study/review/exam/break）"},
+                        "allowed_actions": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "可用操作列表",
                         },
                     },
                     "required": ["scene_id"],
@@ -177,6 +226,30 @@ class UIOrchestrator:
         "show_knowledge_graph": ("KnowledgeGraph", ComponentSlot.PANEL, ComponentLifecycle.STICKY),
         "switch_scene": ("SceneCard", ComponentSlot.OVERLAY, ComponentLifecycle.EPHEMERAL),
     }
+
+    PROP_RENAMES = {
+        "character_name": "characterName",
+        "mood_direction": "moodDirection",
+        "point_id": "pointId",
+        "point_name": "pointName",
+        "active_index": "activeIndex",
+        "mastery_level": "masteryLevel",
+        "scene_id": "sceneId",
+        "scene_name": "sceneName",
+        "allowed_actions": "allowedActions",
+    }
+
+    def _camel_case_props(self, props: dict) -> dict:
+        out = {}
+        for k, v in props.items():
+            key = self.PROP_RENAMES.get(k, k)
+            if isinstance(v, list):
+                out[key] = [self._camel_case_props(item) if isinstance(item, dict) else item for item in v]
+            elif isinstance(v, dict):
+                out[key] = self._camel_case_props(v)
+            else:
+                out[key] = v
+        return out
 
     def convert_tool_calls(self, tool_calls: list) -> list[UIComponent]:
         components = []
@@ -202,7 +275,7 @@ class UIOrchestrator:
             components.append(UIComponent(
                 id=f"comp_{tc_id}",
                 component=comp_name,
-                props=args,
+                props=self._camel_case_props(args),
                 slot=slot,
                 lifecycle=lifecycle,
             ))
