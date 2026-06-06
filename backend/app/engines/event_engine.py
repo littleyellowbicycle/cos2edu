@@ -20,6 +20,7 @@ class EventDefinition:
     description_template: str = ""
     scene_change: Optional[str] = None
     probability: float = 0.05
+    priority: int = 50
     options: list = field(default_factory=list)
 
 
@@ -30,6 +31,7 @@ class TriggeredEvent:
     description: str
     scene_change: Optional[str] = None
     options: list = field(default_factory=list)
+    priority: int = 50
 
 
 class EventEngine:
@@ -61,6 +63,7 @@ class EventEngine:
                     description_template=evt_data.get("description_template", ""),
                     scene_change=evt_data.get("scene_change"),
                     probability=0.05 if evt_data.get("condition") and "random" in evt_data.get("condition", "") else 1.0,
+                    priority=evt_data.get("priority", 50),
                     options=evt_data.get("options", []),
                 ))
             logger.info(f"EventEngine loaded: {len(self._events)} events")
@@ -81,9 +84,13 @@ class EventEngine:
                         description=event.description or event.description_template,
                         scene_change=event.scene_change,
                         options=event.options,
+                        priority=event.priority,
                     ))
                     self._triggered_today.add(event.id)
 
+        triggered.sort(key=lambda e: next(
+            (ev.priority for ev in self._events if ev.id == e.event_id), 50
+        ))
         self._last_checked_day = current_day
         return triggered
 
@@ -113,9 +120,13 @@ class EventEngine:
                     description=description,
                     scene_change=event.scene_change,
                     options=event.options,
+                    priority=event.priority,
                 ))
                 self._triggered_today.add(event.id)
 
+        triggered.sort(key=lambda e: next(
+            (ev.priority for ev in self._events if ev.id == e.event_id), 50
+        ))
         return triggered
 
     def check_random_events(self) -> Optional[TriggeredEvent]:
@@ -134,6 +145,7 @@ class EventEngine:
                     description=event.description,
                     scene_change=event.scene_change,
                     options=event.options,
+                    priority=event.priority,
                 )
         return None
 

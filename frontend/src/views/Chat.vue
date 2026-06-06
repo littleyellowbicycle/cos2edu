@@ -97,7 +97,11 @@
             </div>
             <p class="result-feedback">{{ assessmentResultData.feedback }}</p>
             <div class="result-stats">
-              <span>掌握度: {{ Math.round(assessmentResultData.mastery_level * 100) }}%</span>
+              <div class="mastery-progress-group">
+                <span class="mastery-label">掌握度</span>
+                <progress class="mastery-bar" :value="Math.round(assessmentResultData.mastery_level * 100)" max="100"></progress>
+                <span class="mastery-pct">{{ Math.round(assessmentResultData.mastery_level * 100) }}%</span>
+              </div>
               <span>状态: {{ masteryStatusLabel }}</span>
             </div>
             <button class="btn-continue" @click="continueAfterAssessment">继续学习</button>
@@ -915,10 +919,54 @@ function formatDate(dateStr) {
 
 .result-stats {
   display: flex;
-  gap: 20px;
+  flex-direction: column;
+  gap: 8px;
   margin: 12px 0;
   font-size: 14px;
   color: var(--color-text-muted);
+}
+
+.mastery-progress-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mastery-label {
+  font-weight: 600;
+  min-width: 48px;
+}
+
+.mastery-bar {
+  flex: 1;
+  height: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 7px;
+  overflow: hidden;
+  background: var(--color-surface);
+}
+
+.mastery-bar::-webkit-progress-bar {
+  background: var(--color-surface);
+  border-radius: 7px;
+}
+
+.mastery-bar::-webkit-progress-value {
+  background: linear-gradient(90deg, #6c5ce7, #a29bfe);
+  border-radius: 7px;
+  transition: width 0.4s ease;
+}
+
+.mastery-bar::-moz-progress-bar {
+  background: linear-gradient(90deg, #6c5ce7, #a29bfe);
+  border-radius: 7px;
+}
+
+.mastery-pct {
+  font-weight: 700;
+  min-width: 36px;
+  text-align: right;
+  color: #6c5ce7;
 }
 
 .btn-continue {

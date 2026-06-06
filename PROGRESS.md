@@ -35,7 +35,7 @@
 
 - [x] EmotionEngine：mood/trust 计算（含衰减）、角色敏感度曲线、表达生成
 - [x] EventEngine：时间事件 / 条件事件 / 随机事件触发，从 YAML 加载，优先级评估
-- [x] 文档解析器：PDF（pdfplumber + PyMuPDF fallback）、DOCX（python-docx）、TXT/MD（chardet 编码检测）、解析注册表（magic number + 扩展名派发）
+- [x] 文档解析器：PDF（pdfplumber + PyPDF2 fallback）、DOCX（python-docx）、TXT/MD（chardet 编码检测）、解析注册表（magic number + 扩展名派发）
 - [x] Material pipeline：异步状态机（parsing → indexing → outlining → pending_review）、LLM 大纲生成、WS 通知
 - [x] NarrativeEngine 更新：接收 emotion_engine / event_engine、情感 prompt 构建、事件触发场景切换
 - [x] WS handler 更新：syllabus.confirm / reject, action.choose 消息类型
@@ -137,15 +137,15 @@
 |--------|------|------|
 | 🔴 高 | vite build 报错 @vitejs/plugin-vue resolve | ✅ 已修复（node_modules 重装） |
 | 🟡 中 | RAG 使用哈希伪嵌入，检索精度有限 | ✅ Phase 2.0 升级为三级 fallback |
-| 🟡 中 | EventEngine 缺少优先级评估 | ❌ 事件按 YAML 加载顺序返回，无 priority 字段和排序逻辑 |
-| 🟡 中 | PDF fallback 库名错误 | ❌ PROGRESS 写 PyMuPDF，实际代码用 PyPDF2 |
+| 🟡 中 | EventEngine 缺少优先级评估 | ✅ 已修复：添加 priority 字段（默认50）+ sorted 返回 |
+| 🟡 中 | PDF fallback 库名错误 | ✅ 已修复：PROGRESS 已更正为 PyPDF2 |
 | 🟡 中 | Material pipeline 卡在 parsing 状态 | ✅ 已修复：process_material 从未被调用+repair-stuck 端点 |
 | 🟡 中 | 历史对话加载缺失 | ✅ 已修复：loadConversation 未赋值 messages |
 | 🟡 中 | RAG 未接入 REST 聊天路径 | ✅ 已修复：ChatService._build_messages 优先 RAG 检索 |
 | 🟡 中 | 后端启动卡住 30s+ | ✅ 已修复：FAISS/numpy/fastembed 懒加载 |
 | 🟢 低 | EmotionEngine mood 判断基于关键词，未使用 LLM | 后续优化 |
-| 🟢 低 | 考核掌握度进度条 | ⚠️ Chat.vue 显示为文字 XX%，非可视进度条组件（Dashboard 有 progress bar） |
-| 🟢 低 | WS 协议 schema 数量 | ⚠️ PROGRESS 写 20+，实际 Pydantic schema 14 个（含服务端推送共 27 种消息类型） |
+| 🟢 低 | 考核掌握度进度条 | ✅ 已修复：Chat.vue 使用 progress 元素替代纯文字 |
+| 🟢 低 | WS 协议 schema 数量 | ✅ 已修复：新增15个 Pydantic schema（共28个，覆盖全部27种消息类型） |
 
 ---
 
@@ -166,6 +166,7 @@
 | YAML 编辑 | API 读写 + 自动备份 | 保存前 YAML 语法校验，.bak 回滚 |
 | 角色创建 | YAML 模板 + 向导 UI | 4 模板，创建后自动热加载到引擎 |
 | 热重载 | POST /content/reload | 不重启进程重新加载所有 YAML 内容到内存 |
+| FAISS 持久化 | save_index/load_index | 支持 FAISS 索引和 chunks 保存到磁盘和恢复，避免重启后重建索引 |
 | 事件通知 | WS narrative.options + 弹窗 UI | 事件触发时推送选项，用户选择后发送 action.choose |
 | 大纲编辑 | 拖拽排序 + 依赖编辑 | HTML5 Drag & Drop，保存通过 YAML API + 热重载 |
 | ContextBudget 集成 | TeachingEngine.build_teaching_prompt | 结构化模式走 ContextBudget，非结构化走简化 prompt |

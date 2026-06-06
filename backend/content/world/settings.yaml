@@ -41,6 +41,7 @@ time_events:
     trigger_day: 5
     description: "基础阶段结束了！老师决定来一次小测验，看看你掌握了多少。"
     scene_change: "exam_room"
+    priority: 80
     options:
       - id: "accept"
         text: "接受挑战"
@@ -55,6 +56,7 @@ time_events:
     trigger_day: 10
     description: "进阶阶段结束，是时候验证你的实力了！"
     scene_change: "exam_room"
+    priority: 80
     options:
       - id: "accept"
         text: "全力以赴"
@@ -69,6 +71,7 @@ time_events:
     trigger_day: 15
     description: "15天的学习之旅即将结束，最后的考试将决定你是否毕业。"
     scene_change: "exam_room"
+    priority: 100
     condition: null
 
   - id: "encouragement"
@@ -77,6 +80,7 @@ time_events:
     condition: "mastery_avg < 0.3 AND current_day > 3"
     description: ""
     description_template: "{character_name}注意到了你的困惑，给你讲了一个小故事来鼓励你继续前进。"
+    priority: 60
     options:
       - id: "thank"
         text: "感谢鼓励，继续努力"
@@ -91,6 +95,7 @@ time_events:
     condition: "random_probability < 0.05"
     description: "突然来一个小测验，检验一下最近的学习成果！"
     scene_change: "classroom"
+    priority: 30
     options:
       - id: "accept"
         text: "来吧，我准备好了"

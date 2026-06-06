@@ -297,6 +297,74 @@ class RAGService:
             self.index = _faiss.IndexFlatL2(self.embedding_dim)
         self.chunks = []
 
+    def save_index(self, path: str) -> bool:
+        if not self._initialized or self.index is None or not _faiss_available:
+            logger.warning("Cannot save: FAISS index not initialized")
+            return False
+
+        index_path = os.path.join(path, "faiss.index")
+        chunks_path = os.path.join(path, "chunks.json")
+        meta_path = os.path.join(path, "meta.json")
+
+        try:
+            os.makedirs(path, exist_ok=True)
+            _faiss.write_index(self.index, index_path)
+
+            import json
+            with open(chunks_path, "w", encoding="utf-8") as f:
+                json.dump(self.chunks, f, ensure_ascii=False)
+            with open(meta_path, "w", encoding="utf-8") as f:
+                json.dump({
+                    "embedding_dim": self.embedding_dim,
+                    "provider": self._embed_provider,
+                    "chunk_count": len(self.chunks),
+                    "index_size": self.index.ntotal,
+                }, f, ensure_ascii=False)
+
+            logger.info(f"FAISS index saved to {path} ({self.index.ntotal} vectors, {len(self.chunks)} chunks)")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to save FAISS index: {e}")
+            return False
+
+    def load_index(self, path: str) -> bool:
+        if not _try_init_faiss():
+            logger.warning("Cannot load: FAISS not available")
+            return False
+
+        import json
+
+        index_path = os.path.join(path, "faiss.index")
+        chunks_path = os.path.join(path, "chunks.json")
+        meta_path = os.path.join(path, "meta.json")
+
+        if not os.path.exists(index_path) or not os.path.exists(chunks_path):
+            logger.warning(f"Index files not found in {path}")
+            return False
+
+        try:
+            self.index = _faiss.read_index(index_path)
+
+            with open(chunks_path, "r", encoding="utf-8") as f:
+                self.chunks = json.load(f)
+
+            if os.path.exists(meta_path):
+                with open(meta_path, "r", encoding="utf-8") as f:
+                    meta = json.load(f)
+                if meta.get("embedding_dim") != self.embedding_dim:
+                    logger.warning(
+                        f"Index dim ({meta.get('embedding_dim')}) != service dim ({self.embedding_dim}), re-indexing recommended"
+                    )
+
+            self._initialized = True
+            logger.info(f"FAISS index loaded from {path} ({self.index.ntotal} vectors, {len(self.chunks)} chunks)")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to load FAISS index: {e}")
+            self.index = None
+            self.chunks = []
+            return False
+
 
 _rag_service: Optional[RAGService] = None
 
