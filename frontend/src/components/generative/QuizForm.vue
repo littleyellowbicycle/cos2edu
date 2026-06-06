@@ -46,18 +46,16 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { useWebSocket } from '@/composables/useWebSocket'
 import { useNarrativeStore } from '@/stores/narrative'
 
 const props = defineProps({
   pointId: { type: String, default: '' },
   questions: { type: Array, default: () => [] },
   pointName: { type: String, default: '' },
+  componentId: { type: String, default: '' },
 })
 
 const emit = defineEmits(['interact', 'complete', 'continue'])
-
-const ws = useWebSocket()
 const narrativeStore = useNarrativeStore()
 const answers = ref({})
 
@@ -104,10 +102,8 @@ function handleSubmit() {
 
   emit('interact', {
     action: 'submit',
-    value: { pointId: quiz.point_id, answers: formattedAnswers },
+    value: { pointId: quiz.point_id || props.pointId, answers: formattedAnswers },
   })
-
-  ws.submitAssessment(quiz.point_id, '', formattedAnswers, 0)
 }
 
 function handleContinue() {

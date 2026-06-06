@@ -68,7 +68,7 @@
             </div>
           </div>
 
-          <QuizForm />
+          <QuizForm @interact="handleQuizInteract" />
 
           <Transition name="event-slide">
             <div v-if="activeEventNotification" class="event-notification" role="alert" aria-live="assertive">
@@ -374,6 +374,13 @@ let wsUnsubFns = []
 
 const activeEventNotification = ref(null)
 
+function handleQuizInteract(eventData) {
+  if (eventData?.action === 'submit' && eventData?.value) {
+    const { pointId, answers } = eventData.value
+    ws.submitAssessment(pointId, characterId.value, answers, conversationId.value)
+  }
+}
+
 function dismissEvent() {
   activeEventNotification.value = null
 }
@@ -497,7 +504,6 @@ onMounted(async () => {
   }))
   wsUnsubFns.push(ws.on('assessment.quiz', (msg) => {
     narrativeStore.setAssessment(msg.payload)
-    assessmentAnswers.value = {}
   }))
   wsUnsubFns.push(ws.on('assessment.result', (msg) => {
     narrativeStore.setAssessmentResult(msg.payload)
