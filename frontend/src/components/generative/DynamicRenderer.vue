@@ -1,5 +1,5 @@
 <template>
-  <div class="generative-slot" :class="`slot-${slot}`">
+  <div class="generative-slot" :class="`slot-${slotName}`">
     <component
       v-for="item in activeComponents"
       :key="item.id"
@@ -19,11 +19,12 @@ import LoadingPlaceholder from './LoadingPlaceholder.vue'
 import ErrorFallback from './ErrorFallback.vue'
 
 const props = defineProps({
-  slot: { type: String, required: true },
+  slotName: { type: String, required: true },
 })
 
 const ws = useWebSocket()
 const components = ref([])
+const componentCache = new Map()
 
 const activeComponents = computed(() =>
   components.value.filter(c => c.resolved !== null)
@@ -33,7 +34,7 @@ function handleUIRender(msg) {
   if (msg.type !== 'ui.render') return
 
   for (const comp of (msg.components || [])) {
-    if (comp.slot !== props.slot) continue
+    if (comp.slot !== props.slotName) continue
     if (!validateProps(comp.component, comp.props || {})) {
       console.warn(`[DynamicRenderer] Invalid props for ${comp.component}`)
       continue
@@ -45,21 +46,30 @@ function handleUIRender(msg) {
       continue
     }
 
-    const asyncComp = defineAsyncComponent({
-      loader: meta.loader,
-      loadingComponent: LoadingPlaceholder,
-      errorComponent: ErrorFallback,
-      delay: 100,
-      timeout: 5000,
-    })
+    if (!componentCache.has(comp.component)) {
+      componentCache.set(comp.component, defineAsyncComponent({
+        loader: meta.loader,
+        loadingComponent: LoadingPlaceholder,
+        errorComponent: ErrorFallback,
+        delay: 100,
+        timeout: 5000,
+      }))
+    }
+    const asyncComp = componentCache.get(comp.component)
 
-    components.value.push({
+    const existingIdx = components.value.findIndex(c => c.id === comp.id)
+    const entry = {
       id: comp.id,
       name: comp.component,
       props: comp.props || {},
       lifecycle: comp.lifecycle || meta.defaultLifecycle,
       resolved: asyncComp,
-    })
+    }
+    if (existingIdx >= 0) {
+      components.value[existingIdx] = entry
+    } else {
+      components.value.push(entry)
+    }
   }
 }
 
@@ -73,19 +83,12 @@ function handleUIUpdate(msg) {
   if (msg.type !== 'ui.update') return
   const comp = components.value.find(c => c.id === msg.component_id)
   if (comp) {
-    Object.assign(comp.props, msg.props || {})
+    comp.props = { ...comp.props, ...(msg.props || {}) }
   }
 }
 
 function handleInteract(componentId, eventData) {
-  ws.send({
-    type: 'ui.interact',
-    payload: {
-      component_id: componentId,
-      action: eventData?.action || '',
-      value: eventData?.value || eventData,
-    },
-  })
+  ws.sendUIInteract(componentId, eventData?.action || '', eventData?.value || eventData)
 }
 
 function removeComponent(id) {

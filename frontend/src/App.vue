@@ -33,6 +33,7 @@ function retry() {
 
 <style>
 @import './styles/variables.css';
+@import './styles/global.css';
 
 * {
   margin: 0;

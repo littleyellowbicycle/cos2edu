@@ -46,6 +46,7 @@
             </div>
             <div class="message-content">
               <div class="message-text" :class="{ 'is-streaming': isTyping && index === messages.length - 1 && msg.role === 'assistant' }" :ref="el => { if (el) messageRefs[msg.timestamp] = el }" v-html="getRenderedContent(msg)"></div>
+              <DynamicRenderer v-if="msg.role === 'assistant'" slot-name="inline" />
               <div class="message-footer" v-if="msg.role === 'assistant'">
                 <button class="msg-action-btn" title="复制消息" @click="copyMessage(index, msg.content)">
                   <span v-if="copiedMsgIdx === index">✓</span>
@@ -176,8 +177,8 @@
         </div>
       </aside>
     </div>
-    <DynamicRenderer slot="overlay" />
-    <DynamicRenderer slot="panel" />
+    <DynamicRenderer slot-name="overlay" />
+    <DynamicRenderer slot-name="panel" />
   </div>
 </template>
 

@@ -54,6 +54,14 @@ export function validateProps(name: string, props: Record<string, any>): boolean
         console.warn(`[GenerativeUI] Prop "${key}" of component "${name}" should be number`)
         return false
       }
+      if (schema.min !== undefined && props[key] < schema.min) {
+        console.warn(`[GenerativeUI] Prop "${key}" of component "${name}" is below min (${props[key]} < ${schema.min})`)
+        return false
+      }
+      if (schema.max !== undefined && props[key] > schema.max) {
+        console.warn(`[GenerativeUI] Prop "${key}" of component "${name}" is above max (${props[key]} > ${schema.max})`)
+        return false
+      }
     }
   }
   return true

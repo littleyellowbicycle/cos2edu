@@ -2,16 +2,16 @@
   <div class="error-fallback">
     <span class="error-icon">&#9888;</span>
     <span class="error-text">{{ componentName }} 加载失败</span>
-    <button class="error-retry" @click="$emit('retry')">重试</button>
+    <button v-if="retry" class="error-retry" @click="retry">重试</button>
   </div>
 </template>
 
 <script setup>
 defineProps({
   componentName: { type: String, default: '组件' },
+  error: { type: Error, default: null },
+  retry: { type: Function, default: null },
 })
-
-defineEmits(['retry'])
 </script>
 
 <style scoped>

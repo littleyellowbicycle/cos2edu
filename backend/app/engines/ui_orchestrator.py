@@ -181,18 +181,23 @@ class UIOrchestrator:
     def convert_tool_calls(self, tool_calls: list) -> list[UIComponent]:
         components = []
         for tc in tool_calls:
-            func_name = tc.function.name if hasattr(tc, 'function') else tc.get('function', {}).get('name', '')
+            if hasattr(tc, 'function') and tc.function is not None:
+                func_name = tc.function.name or ''
+                args_str = tc.function.arguments or '{}'
+                tc_id = getattr(tc, 'id', f'comp_{len(components)}')
+            else:
+                func_name = tc.get('name', '') or tc.get('function', {}).get('name', '')
+                args_str = tc.get('arguments', '{}') or tc.get('function', {}).get('arguments', '{}')
+                tc_id = tc.get('id', f'comp_{len(components)}')
+
             if func_name not in self.TOOL_TO_COMPONENT:
                 continue
 
             comp_name, slot, lifecycle = self.TOOL_TO_COMPONENT[func_name]
-            args_str = tc.function.arguments if hasattr(tc, 'function') else tc.get('function', {}).get('arguments', '{}')
             try:
                 args = json.loads(args_str) if isinstance(args_str, str) else args_str
             except (json.JSONDecodeError, TypeError):
                 args = {}
-
-            tc_id = tc.id if hasattr(tc, 'id') else tc.get('id', f'comp_{len(components)}')
 
             components.append(UIComponent(
                 id=f"comp_{tc_id}",

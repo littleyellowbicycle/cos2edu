@@ -146,7 +146,7 @@ class LLMProvider:
                 anthropic_tools = []
                 if tools:
                     for t in tools:
-                        func = t.get("function", t.get("function", {}))
+                        func = t.get("function", {})
                         anthropic_tools.append({
                             "name": func.get("name", ""),
                             "description": func.get("description", ""),
@@ -165,17 +165,27 @@ class LLMProvider:
                     create_kwargs["tools"] = anthropic_tools
 
                 stream = await client.messages.create(**create_kwargs)
+                anthropic_tool_calls = {}
                 async for chunk in stream:
                     if chunk.type == "content_block_delta" and hasattr(chunk, 'delta') and hasattr(chunk.delta, 'text'):
                         yield {"type": "text", "content": chunk.delta.text}
                     elif chunk.type == "content_block_start" and hasattr(chunk, 'content_block') and chunk.content_block.type == "tool_use":
-                        yield {"type": "tool_calls", "tool_calls": [{
+                        block_idx = chunk.index if hasattr(chunk, 'index') else len(anthropic_tool_calls)
+                        anthropic_tool_calls[block_idx] = {
                             "id": chunk.content_block.id,
                             "name": chunk.content_block.name,
                             "arguments": "",
-                        }]}
+                        }
                     elif chunk.type == "content_block_delta" and hasattr(chunk, 'delta') and chunk.delta.type == "input_json_delta":
-                        yield {"type": "tool_call_delta", "id": "", "arguments_delta": chunk.delta.partial_json}
+                        block_idx = getattr(chunk, 'index', 0)
+                        if block_idx in anthropic_tool_calls:
+                            anthropic_tool_calls[block_idx]["arguments"] += chunk.delta.partial_json
+
+                if anthropic_tool_calls:
+                    yield {
+                        "type": "tool_calls",
+                        "tool_calls": list(anthropic_tool_calls.values()),
+                    }
             else:
                 create_kwargs = {
                     "model": self.model_name,
@@ -202,7 +212,7 @@ class LLMProvider:
                                 tool_calls_accumulator[idx]["id"] = tc.id
                             if hasattr(tc, 'function') and tc.function:
                                 if tc.function.name:
-                                    tool_calls_accumulator[idx]["name"] += tc.function.name
+                                    tool_calls_accumulator[idx]["name"] = tc.function.name
                                 if tc.function.arguments:
                                     tool_calls_accumulator[idx]["arguments"] += tc.function.arguments
 
