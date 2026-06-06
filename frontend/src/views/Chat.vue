@@ -191,6 +191,7 @@ import katex from 'katex'
 import 'katex/dist/katex.min.css'
 import mermaid from 'mermaid'
 import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { useNarrativeStore } from '@/stores/narrative'
 import DynamicRenderer from '@/components/generative/DynamicRenderer.vue'
@@ -337,7 +338,10 @@ function getRenderedContent(msg) {
   })
   text = preprocessMarkdown(text)
   let html = marked.parse(text)
-  return html
+  return DOMPurify.sanitize(html, {
+    ADD_TAGS: ['details', 'summary', 'canvas'],
+    ADD_ATTR: ['collapsible'],
+  })
 }
 
 mermaid.initialize({
@@ -575,6 +579,9 @@ onMounted(async () => {
   }))
 
   narrativeStore.setConnectionState(ws.connectionState.value)
+  watch(() => ws.connectionState.value, (state) => {
+    narrativeStore.setConnectionState(state)
+  })
 })
 
 onUnmounted(() => {
@@ -621,7 +628,7 @@ async function sendMessage() {
     }
 
     messages.value.push({ role: 'assistant', content: '', timestamp: new Date() })
-    isTyping.value = false
+    isTyping.value = true
 
     ws.sendChat(conversationId.value, userMessage, characterId.value)
   } catch (e) {
@@ -1587,9 +1594,9 @@ function formatDate(dateStr) {
   background: #FEF2F2;
   color: #C75050;
   padding: 12px 16px;
-  border-radius: 4px;
+border-radius: 4px;
   border: 1px solid #FFCDD2;
-  font-family: monospace;
+  font-family: var(--font-mono, monospace);
   font-size: 13px;
 }
 
@@ -1597,7 +1604,7 @@ function formatDate(dateStr) {
   background: var(--color-bg-warm);
   padding: 2px 6px;
   border-radius: 4px;
-  font-family: 'Fira Code', 'Monaco', monospace;
+  font-family: var(--font-mono, 'Fira Code', 'Monaco', monospace);
   font-size: 0.9em;
 }
 
@@ -1797,7 +1804,7 @@ function formatDate(dateStr) {
   background: #1e1e2e;
   color: #cdd6f4;
   overflow-x: auto;
-  font-family: 'Fira Code', 'Monaco', monospace;
+  font-family: var(--font-mono, 'Fira Code', 'Monaco', monospace);
   font-size: 13px;
   line-height: 1.6;
 }

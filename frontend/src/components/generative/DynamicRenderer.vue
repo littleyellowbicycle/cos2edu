@@ -14,6 +14,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, defineAsyncComponent } from 'vue'
 import { useWebSocket } from '@/composables/useWebSocket'
+import { useNarrativeStore } from '@/stores/narrative'
 import { getComponent, validateProps } from './registry'
 import LoadingPlaceholder from './LoadingPlaceholder.vue'
 import ErrorFallback from './ErrorFallback.vue'
@@ -23,6 +24,7 @@ const props = defineProps({
 })
 
 const ws = useWebSocket()
+const narrativeStore = useNarrativeStore()
 const components = ref([])
 const componentCache = new Map()
 
@@ -70,6 +72,13 @@ function handleUIRender(msg) {
     } else {
       components.value.push(entry)
     }
+    narrativeStore.addGenerativeComponent({
+      id: comp.id,
+      component: comp.component,
+      props: comp.props || {},
+      slot: comp.slot || props.slotName,
+      lifecycle: comp.lifecycle || meta.defaultLifecycle,
+    })
   }
 }
 
@@ -77,6 +86,9 @@ function handleUIDestroy(msg) {
   if (msg.type !== 'ui.destroy') return
   const ids = msg.component_ids || []
   components.value = components.value.filter(c => !ids.includes(c.id))
+  for (const id of ids) {
+    narrativeStore.removeGenerativeComponent(id)
+  }
 }
 
 function handleUIUpdate(msg) {
@@ -84,6 +96,7 @@ function handleUIUpdate(msg) {
   const comp = components.value.find(c => c.id === msg.component_id)
   if (comp) {
     comp.props = { ...comp.props, ...(msg.props || {}) }
+    narrativeStore.updateGenerativeComponent(msg.component_id, msg.props || {})
   }
 }
 

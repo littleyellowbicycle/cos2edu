@@ -110,11 +110,7 @@ export const useNarrativeStore = defineStore('narrative', () => {
   }
 
   function advanceTime(payload) {
-    world.currentDay = payload.current_day || world.currentDay + 1
-    world.progressPercent = payload.progress_percent || Math.round(world.currentDay / world.totalDays * 100)
-    if (payload.narrative_phase) {
-      world.narrativePhase = payload.narrative_phase
-    }
+    applyTimeAdvance(payload)
   }
 
   function updateSceneChange(payload) {

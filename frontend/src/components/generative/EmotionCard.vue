@@ -33,6 +33,7 @@ const props = defineProps({
   trust: { type: Number, default: 0.5 },
   characterName: { type: String, default: '' },
   reason: { type: String, default: '' },
+  moodDirection: { type: String, default: '' },
 })
 
 const moodPercent = computed(() => Math.round(Math.max(0, Math.min(1, props.mood)) * 100))
@@ -50,9 +51,10 @@ const moodClass = computed(() => {
 })
 
 const moodTrend = computed(() => {
-  if (props.mood >= 0.7) return '↑'
-  if (props.mood >= 0.4) return '→'
-  return '↓'
+  if (props.moodDirection === 'up') return '↑'
+  if (props.moodDirection === 'down') return '↓'
+  if (props.moodDirection === 'stable') return '→'
+  return ''
 })
 </script>
 

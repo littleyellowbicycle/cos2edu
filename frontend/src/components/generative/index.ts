@@ -9,6 +9,7 @@ registerComponent({
     trust: { type: 'number', required: true, min: 0, max: 1 },
     characterName: { type: 'string', required: true },
     reason: { type: 'string', required: false },
+    moodDirection: { type: 'string', required: false, enum: ['up', 'down', 'stable', ''] },
   },
   slot: 'inline',
   defaultLifecycle: 'persistent',
