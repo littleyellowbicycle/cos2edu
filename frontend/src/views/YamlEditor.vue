@@ -99,6 +99,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import api from '@/api'
 import YamlPreview from '@/components/YamlPreview.vue'
+import yaml from 'js-yaml'
 
 const fileCategories = ref([
   { key: 'syllabus', label: '课程大纲', files: [] },
@@ -119,7 +120,7 @@ const parseError = ref('')
 const parsedData = computed(() => {
   if (!yamlContent.value) return null
   try {
-    return require('js-yaml').load(yamlContent.value)
+    return yaml.load(yamlContent.value)
   } catch {
     return null
   }
@@ -131,7 +132,7 @@ watch(yamlContent, (val) => {
     return
   }
   try {
-    require('js-yaml').load(val)
+    yaml.load(val)
     parseError.value = ''
   } catch (e) {
     parseError.value = e.message

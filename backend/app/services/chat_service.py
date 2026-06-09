@@ -107,7 +107,7 @@ class LLMProvider:
         
         try:
             if self.provider == "anthropic":
-                ant_messages = [{"role": m["role"] if m["role"] != "system" else "user", "content": m["content"]} for m in messages]
+                ant_messages = [{"role": m["role"], "content": m["content"]} for m in messages if m["role"] != "system"]
                 system_msg = next((m["content"] for m in messages if m["role"] == "system"), None)
                 response = await client.messages.create(
                     model=self.model_name,
@@ -140,7 +140,7 @@ class LLMProvider:
 
         try:
             if self.provider == "anthropic":
-                ant_messages = [{"role": m["role"] if m["role"] != "system" else "user", "content": m["content"]} for m in messages]
+                ant_messages = [{"role": m["role"], "content": m["content"]} for m in messages if m["role"] != "system"]
                 system_msg = next((m["content"] for m in messages if m["role"] == "system"), None)
 
                 anthropic_tools = []

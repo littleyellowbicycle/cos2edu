@@ -107,9 +107,9 @@ defineEmits(['toggle-sidebar'])
 }
 
 .mood-neutral {
-  background: #fff3e0;
-  color: #e65100;
-  border: 1px solid #ffcc80;
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+  border: 1px solid var(--color-warning-border);
 }
 
 .mood-negative {

@@ -29,7 +29,7 @@ class EmotionEngine:
     def _initialize_from_characters(self) -> None:
         for cid, char in self._character_engine.get_all_characters().items():
             self._mood_state[cid] = char.emotion_profile.get("base_mood", 0.7)
-            self._trust_state[cid] = char.relationship_dynamics.get("trust_growth_rate", 0.5)
+            self._trust_state[cid] = char.relationship_dynamics.get("initial_trust", 0.5)
 
     def get_mood(self, character_id: str) -> float:
         return self._mood_state.get(character_id, 0.7)

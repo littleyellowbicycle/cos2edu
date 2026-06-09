@@ -69,7 +69,9 @@ class SimpleRAGProvider(BaseRAGProvider):
         vec = []
         for i in range(dim):
             byte_idx = (i * 4) % len(h)
-            val = int.from_bytes(h[byte_idx:byte_idx + 4 % len(h)], 'little', signed=True) / (2 ** 31)
+            if byte_idx + 4 > len(h):
+                break
+            val = int.from_bytes(h[byte_idx:byte_idx + 4], 'little', signed=True) / (2 ** 31)
             vec.append(val)
         magnitude = sum(x * x for x in vec) ** 0.5
         if magnitude > 0:

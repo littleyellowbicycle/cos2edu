@@ -1,5 +1,5 @@
 from typing import List, Optional
-from sqlalchemy import select, update
+from sqlalchemy import select, update, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from models.model_config import ModelConfig
 from .base import BaseRepository
@@ -31,8 +31,8 @@ class ModelConfigRepository(BaseRepository[ModelConfig]):
         return result.scalar_one_or_none()
 
     async def create(self, obj_in: dict) -> ModelConfig:
-        count_result = await self.session.execute(select(self.model.id))
-        existing_count = len(count_result.scalars().all())
+        count_result = await self.session.execute(select(func.count(self.model.id)))
+        existing_count = count_result.scalar()
         is_default = obj_in.get('is_default') or existing_count == 0
 
         if is_default:

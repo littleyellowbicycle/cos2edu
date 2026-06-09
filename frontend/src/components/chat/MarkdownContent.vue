@@ -297,7 +297,7 @@ onMounted(() => {
 }
 
 .markdown-content :deep(.math-error) {
-  color: #C75050;
+  color: var(--color-error);
   background: #FEF2F2;
   padding: 4px 8px;
   border-radius: 4px;
@@ -341,9 +341,9 @@ onMounted(() => {
 
 .markdown-content :deep(.mermaid-error) {
   background: #FEF2F2;
-  color: #C75050;
+  color: var(--color-error);
   padding: 12px 16px;
-border-radius: 4px;
+  border-radius: 4px;
   border: 1px solid #FFCDD2;
   font-family: var(--font-mono, monospace);
   font-size: 13px;
@@ -594,8 +594,8 @@ border-radius: 4px;
 }
 
 .markdown-content :deep(.ai-code-copy.copied ) {
-  background: #2e7d32;
-  border-color: #2e7d32;
+  background: var(--color-success, #2e7d32);
+  border-color: var(--color-success, #2e7d32);
   color: white;
 }
 

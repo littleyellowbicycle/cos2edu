@@ -50,9 +50,11 @@ def setup_static_files(app):
     async def serve_spa(full_path: str):
         if full_path.startswith("api/"):
             raise HTTPException(status_code=404, detail="Not Found")
-        file_path = os.path.join(static_dir, full_path)
-        if os.path.isfile(file_path):
-            return FileResponse(file_path)
+        resolved = os.path.realpath(os.path.join(static_dir, full_path))
+        if not resolved.startswith(os.path.realpath(static_dir)):
+            raise HTTPException(status_code=403, detail="Forbidden")
+        if os.path.isfile(resolved):
+            return FileResponse(resolved)
         
         dist_index = os.path.join(static_dir, "dist", "index.html")
         if os.path.exists(dist_index):

@@ -53,7 +53,7 @@ class FileUploadService:
             if os.path.exists(filepath):
                 try:
                     os.remove(filepath)
-                except:
+                except OSError:
                     pass
             if isinstance(e, HTTPException):
                 raise
@@ -100,11 +100,12 @@ class FileUploadService:
         try:
             if file_url.startswith("/api/uploads/"):
                 relative_path = file_url.replace("/api/uploads/", "")
-                filepath = os.path.join(settings.UPLOADS_DIR, relative_path)
-                
+                filepath = os.path.realpath(os.path.join(settings.UPLOADS_DIR, relative_path))
+                if not filepath.startswith(os.path.realpath(settings.UPLOADS_DIR)):
+                    return False
                 if os.path.exists(filepath):
                     os.remove(filepath)
                     return True
             return False
-        except Exception:
+        except OSError:
             return False

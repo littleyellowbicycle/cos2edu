@@ -25,11 +25,18 @@ echo "✓ 数据目录已就绪"
 
 echo ""
 echo "[2/4] 运行数据库迁移..."
+cd "$(dirname "$0")/backend"
 if [ -f "migrate_db.py" ]; then
     python migrate_db.py
     echo "✓ 数据库迁移完成"
 else
-    echo "⚠ 未找到 migrate_db.py，跳过迁移"
+    echo "⚠ 未找到 migrate_db.py，尝试 Alembic 迁移..."
+    if [ -f "../alembic.ini" ] && [ -d "../migrations/versions" ] && [ "$(ls -A ../migrations/versions 2>/dev/null)" ]; then
+        alembic upgrade head
+        echo "✓ Alembic 迁移完成"
+    else
+        echo "⚠ 无迁移文件，跳过"
+    fi
 fi
 
 echo ""
@@ -45,8 +52,9 @@ echo ""
 echo "=========================================="
 echo "  启动应用服务..."
 echo "=========================================="
-echo "访问地址: http://localhost:${APP_PORT:-8000}"
-echo "健康检查: http://localhost:${APP_PORT:-8000}/health"
+APP_PORT=${APP_PORT:-8000}
+echo "访问地址: http://localhost:${APP_PORT}"
+echo "健康检查: http://localhost:${APP_PORT}/health"
 echo ""
 
-exec uvicorn main:app --host 0.0.0.0 --port 8000
+exec uvicorn main:app --host 0.0.0.0 --port ${APP_PORT}

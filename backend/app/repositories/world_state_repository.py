@@ -1,5 +1,5 @@
 from typing import Optional
-from sqlalchemy import select
+from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.base import BaseRepository
@@ -12,7 +12,7 @@ class WorldStateRepository(BaseRepository):
 
     async def get_current(self) -> Optional[WorldState]:
         result = await self.session.execute(
-            select(self.model).filter(self.model.id == 1)
+            select(self.model).order_by(desc(self.model.updated_at)).limit(1)
         )
         return result.scalar_one_or_none()
 

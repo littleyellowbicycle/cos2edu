@@ -10,6 +10,9 @@
   --color-border: #E5E0D8;
   --color-ink: #2C2416;
   --color-error: #C75050;
+  --color-warning: #E65100;
+  --color-warning-bg: #FFF3E0;
+  --color-warning-border: #FF9800;
 
   --shadow-sm: 0 1px 3px rgba(44, 36, 22, 0.06);
   --shadow-md: 0 4px 12px rgba(44, 36, 22, 0.08);

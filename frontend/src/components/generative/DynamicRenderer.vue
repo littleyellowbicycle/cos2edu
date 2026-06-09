@@ -28,9 +28,7 @@ const narrativeStore = useNarrativeStore()
 const components = ref([])
 const componentCache = new Map()
 
-const activeComponents = computed(() =>
-  components.value.filter(c => c.resolved !== null)
-)
+const activeComponents = computed(() => components.value)
 
 function handleUIRender(msg) {
   if (msg.type !== 'ui.render') return
@@ -76,7 +74,7 @@ function handleUIRender(msg) {
       id: comp.id,
       component: comp.component,
       props: comp.props || {},
-      slot: comp.slot || props.slotName,
+      slot: comp.slot,
       lifecycle: comp.lifecycle || meta.defaultLifecycle,
     })
   }
@@ -108,20 +106,20 @@ function removeComponent(id) {
   components.value = components.value.filter(c => c.id !== id)
 }
 
-const unsubRender = ref(null)
-const unsubDestroy = ref(null)
-const unsubUpdate = ref(null)
+let unsubRender = null
+let unsubDestroy = null
+let unsubUpdate = null
 
 onMounted(() => {
-  unsubRender.value = ws.on('ui.render', handleUIRender)
-  unsubDestroy.value = ws.on('ui.destroy', handleUIDestroy)
-  unsubUpdate.value = ws.on('ui.update', handleUIUpdate)
+  unsubRender = ws.on('ui.render', handleUIRender)
+  unsubDestroy = ws.on('ui.destroy', handleUIDestroy)
+  unsubUpdate = ws.on('ui.update', handleUIUpdate)
 })
 
 onUnmounted(() => {
-  if (unsubRender.value) unsubRender.value()
-  if (unsubDestroy.value) unsubDestroy.value()
-  if (unsubUpdate.value) unsubUpdate.value()
+  unsubRender?.()
+  unsubDestroy?.()
+  unsubUpdate?.()
 })
 </script>
 

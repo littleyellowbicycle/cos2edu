@@ -14,8 +14,9 @@ def setup_logging(level: str = "INFO"):
         datefmt="%Y-%m-%d %H:%M:%S"
     )
     
-    if root_logger.handlers:
-        root_logger.handlers.clear()
+    # Don't clear handlers — that would remove uvicorn's own handlers.
+    # if root_logger.handlers:
+    #     root_logger.handlers.clear()
     
     stream_handler = logging.StreamHandler(sys.stdout)
     stream_handler.setLevel(log_level)

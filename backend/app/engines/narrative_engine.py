@@ -240,18 +240,11 @@ class NarrativeEngine:
         if not self.assessment:
             return {"error": "AssessmentEngine not initialized"}
 
-        async with UnitOfWork() as uow:
-            progress_records = await uow.session.execute(
-                __import__("sqlalchemy").select(
-                    __import__("sqlalchemy").func.count()
-                ).where(
-                    __import__("sqlalchemy").true()
-                )
-            )
-
         scores = []
         correct_count = 0
-        for q, a in answers:
+        for entry in answers:
+            q = entry.get("question", {})
+            a = entry.get("answer", "")
             if isinstance(a, str) and isinstance(q, dict):
                 result = self.assessment.evaluate_answer(q, a)
                 scores.append(result["score"])

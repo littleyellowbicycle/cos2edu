@@ -23,8 +23,6 @@ async def upload_avatar(
     try:
         file_url = await FileUploadService.save_avatar(file)
         return {"url": file_url, "message": "上传成功"}
-    except HTTPException as e:
-        raise e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"上传失败: {str(e)}")
 
@@ -38,8 +36,6 @@ async def upload_background(
     try:
         file_url = await FileUploadService.save_background(file)
         return {"url": file_url, "message": "上传成功"}
-    except HTTPException as e:
-        raise e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"上传失败: {str(e)}")
 
@@ -47,7 +43,9 @@ async def upload_background(
 @router.get("/uploads/avatars/{filename}")
 @limiter.limit("60/minute")
 async def get_avatar(request: Request, filename: str):
-    filepath = os.path.join(settings.AVATARS_DIR, filename)
+    filepath = os.path.realpath(os.path.join(settings.AVATARS_DIR, filename))
+    if not filepath.startswith(os.path.realpath(settings.AVATARS_DIR)):
+        raise HTTPException(status_code=403, detail="Forbidden")
     if not os.path.exists(filepath):
         raise HTTPException(status_code=404, detail="文件不存在")
     return FileResponse(filepath)
@@ -56,7 +54,9 @@ async def get_avatar(request: Request, filename: str):
 @router.get("/uploads/backgrounds/{filename}")
 @limiter.limit("60/minute")
 async def get_background_file(request: Request, filename: str):
-    filepath = os.path.join(settings.BACKGROUNDS_DIR, filename)
+    filepath = os.path.realpath(os.path.join(settings.BACKGROUNDS_DIR, filename))
+    if not filepath.startswith(os.path.realpath(settings.BACKGROUNDS_DIR)):
+        raise HTTPException(status_code=403, detail="Forbidden")
     if not os.path.exists(filepath):
         raise HTTPException(status_code=404, detail="文件不存在")
     return FileResponse(filepath)

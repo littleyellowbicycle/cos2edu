@@ -130,10 +130,12 @@ async def process_material(
             task.progress = 100
 
             async with uow_factory() as uow:
-                await uow.materials.update(material, {
-                    "status": "pending_review",
-                    "review_status": "pending",
-                })
+                fresh = await uow.materials.get_by_id(material_id)
+                if fresh:
+                    await uow.materials.update(fresh, {
+                        "status": "pending_review",
+                        "review_status": "pending",
+                    })
 
                 from models.syllabus import Syllabus
                 syllabus_data = {

@@ -50,7 +50,7 @@ class TextParser(BaseParser):
         ext = os.path.splitext(file_path)[1].lower()
         fmt = "markdown" if ext in (".md", ".markdown") else "text"
 
-        front_matter = self._extract_front_matter(content, fmt)
+        self._extract_front_matter(content, fmt)
 
         return ParseResult(
             success=True,

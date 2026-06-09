@@ -14,6 +14,8 @@ class NarrativeWebSocket {
     this.connectionState = ref('disconnected')
     this.handlers = new Map()
     this._url = ''
+    this._intentionalDisconnect = false
+    this._reconnectTimer = null
   }
 
   connect(modelConfigId = null) {
@@ -42,11 +44,16 @@ class NarrativeWebSocket {
       this.connected.value = false
       this.connectionState.value = 'disconnected'
       console.log('[WS] Disconnected')
-      this._scheduleReconnect()
+      if (!this._intentionalDisconnect) {
+        this._scheduleReconnect()
+      }
     }
 
     this.ws.onerror = (error) => {
       console.error('[WS] Error:', error)
+      if (this.ws) {
+        this.ws.close()
+      }
     }
 
     this.ws.onmessage = (event) => {
@@ -60,6 +67,9 @@ class NarrativeWebSocket {
   }
 
   _scheduleReconnect() {
+    if (this._reconnectTimer) {
+      clearTimeout(this._reconnectTimer)
+    }
     const delay = Math.min(
       BASE_RECONNECT_DELAY * Math.pow(2, this.reconnectAttempts),
       MAX_RECONNECT_DELAY
@@ -67,10 +77,11 @@ class NarrativeWebSocket {
     this.reconnectAttempts++
     this.connectionState.value = 'reconnecting'
     console.log(`[WS] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`)
-    setTimeout(() => {
+    this._reconnectTimer = setTimeout(() => {
       if (!this.connected.value) {
         this._doConnect(this._url)
       }
+      this._reconnectTimer = null
     }, delay)
   }
 
@@ -193,6 +204,11 @@ class NarrativeWebSocket {
   }
 
   disconnect() {
+    this._intentionalDisconnect = true
+    if (this._reconnectTimer) {
+      clearTimeout(this._reconnectTimer)
+      this._reconnectTimer = null
+    }
     if (this.ws) {
       this.ws.close()
       this.ws = null

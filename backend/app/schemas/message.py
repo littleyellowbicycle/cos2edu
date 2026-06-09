@@ -9,7 +9,7 @@ class MessageBase(BaseModel):
     @field_validator("role")
     @classmethod
     def validate_role(cls, v: str) -> str:
-        valid_roles = ["user", "assistant", "system"]
+        valid_roles = ["user", "assistant", "system", "tool", "function"]
         if v.lower() not in valid_roles:
             raise ValueError(f"无效的消息角色。支持的角色: {', '.join(valid_roles)}")
         return v.lower()

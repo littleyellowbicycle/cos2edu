@@ -101,7 +101,7 @@ export const useNarrativeStore = defineStore('narrative', () => {
 
   function updateProgress(payload) {
     progress.currentPoint = payload.knowledge_point_id
-    progress.currentPointName = payload.knowledge_point_id
+    progress.currentPointName = payload.knowledge_point_name || payload.knowledge_point_id
     progress.status = payload.status
     progress.mastery = payload.mastery
     if (payload.next_point) {

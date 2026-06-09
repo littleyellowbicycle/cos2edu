@@ -31,57 +31,68 @@ class KnowledgeGraph:
         self._point_meta: dict[str, PointMeta] = {}
         self._module_order: dict[str, int] = {}
 
-    def load_from_yaml(self, modules_dir: str) -> None:
+    def _collect_points(self, modules_dir: str) -> list[dict]:
+        """Two-pass helper: first pass collects all raw point data, second resolves prereqs."""
         modules_path = Path(modules_dir)
         if not modules_path.exists():
             logger.warning(f"Modules directory not found: {modules_dir}")
-            return
+            return []
 
-        self._graph.clear()
-        self._point_meta.clear()
-        self._module_order.clear()
-
+        raw_points = []
         for module_file in sorted(modules_path.glob("*.yaml")):
             try:
                 module = yaml.safe_load(module_file.read_text(encoding="utf-8"))
             except Exception as e:
                 logger.error(f"Failed to load module {module_file}: {e}")
                 continue
-
             if not module:
                 continue
-
             module_id = module.get("id", module_file.stem)
             self._module_order[module_id] = module.get("order", 0)
-
             module_prereqs = module.get("prerequisites", [])
+            module_name = module.get("name", module_id)
             for point in module.get("knowledge_points", []):
                 pid = point.get("id", "")
                 if not pid:
                     continue
+                raw_points.append({
+                    "pid": pid,
+                    "point": point,
+                    "module_id": module_id,
+                    "module_name": module_name,
+                    "module_prereqs": module_prereqs,
+                })
+        return raw_points
 
-                point_module_prereqs = []
-                for mp in module_prereqs:
-                    if mp in self._point_meta:
-                        point_module_prereqs.append(mp)
+    def _resolve_prereqs(self, raw_prereq_ids: list[str]) -> set[str]:
+        return {pid for pid in raw_prereq_ids if pid in self._point_meta}
 
-                explicit_prereqs = set(point.get("prerequisites", []))
-                all_prereqs = explicit_prereqs | set(point_module_prereqs)
+    def load_from_yaml(self, modules_dir: str) -> None:
+        self._graph.clear()
+        self._point_meta.clear()
+        self._module_order.clear()
 
-                self._graph[pid] = all_prereqs
-                self._point_meta[pid] = PointMeta(
-                    id=pid,
-                    name=point.get("name", pid),
-                    module_id=module_id,
-                    module_name=module.get("name", module_id),
-                    difficulty=point.get("difficulty", 1),
-                    estimated_minutes=point.get("estimated_minutes", 30),
-                    key_concepts=point.get("key_concepts", []),
-                    teaching_hints=point.get("teaching_hints", {}),
-                    suggested_questions=point.get("suggested_questions", []),
-                    exercises=point.get("exercises", []),
-                    prerequisites=list(explicit_prereqs),
-                )
+        raw_points = self._collect_points(modules_dir)
+
+        for rp in raw_points:
+            self._point_meta[rp["pid"]] = PointMeta(
+                id=rp["pid"],
+                name=rp["point"].get("name", rp["pid"]),
+                module_id=rp["module_id"],
+                module_name=rp["module_name"],
+                difficulty=rp["point"].get("difficulty", 1),
+                estimated_minutes=rp["point"].get("estimated_minutes", 30),
+                key_concepts=rp["point"].get("key_concepts", []),
+                teaching_hints=rp["point"].get("teaching_hints", {}),
+                suggested_questions=rp["point"].get("suggested_questions", []),
+                exercises=rp["point"].get("exercises", []),
+                prerequisites=list(rp["point"].get("prerequisites", [])),
+            )
+
+        for rp in raw_points:
+            explicit_prereqs = self._resolve_prereqs(rp["point"].get("prerequisites", []))
+            module_prereqs = self._resolve_prereqs(rp["module_prereqs"])
+            self._graph[rp["pid"]] = explicit_prereqs | module_prereqs
 
         logger.info(f"KnowledgeGraph loaded: {len(self._point_meta)} points, {len(self._module_order)} modules")
 
@@ -129,39 +140,43 @@ class KnowledgeGraph:
         self._point_meta.clear()
         self._module_order.clear()
 
+        raw_points = []
         modules = syllabus_content.get("modules", [])
         for mod_idx, mod in enumerate(modules):
             module_id = mod.get("id", f"module_{mod_idx}")
             module_name = mod.get("name", module_id)
             self._module_order[module_id] = mod.get("order", mod_idx)
-
             module_prereqs = mod.get("prerequisites", [])
             for point in mod.get("knowledge_points", []):
                 pid = point.get("id", "")
                 if not pid:
                     continue
+                raw_points.append({
+                    "pid": pid,
+                    "point": point,
+                    "module_id": module_id,
+                    "module_name": module_name,
+                    "module_prereqs": module_prereqs,
+                })
 
-                point_module_prereqs = []
-                for mp in module_prereqs:
-                    if mp in self._point_meta:
-                        point_module_prereqs.append(mp)
+        for rp in raw_points:
+            self._point_meta[rp["pid"]] = PointMeta(
+                id=rp["pid"],
+                name=rp["point"].get("name", rp["pid"]),
+                module_id=rp["module_id"],
+                module_name=rp["module_name"],
+                difficulty=rp["point"].get("difficulty", 1),
+                estimated_minutes=rp["point"].get("estimated_minutes", 30),
+                key_concepts=rp["point"].get("key_concepts", []),
+                teaching_hints=rp["point"].get("teaching_hints", {}),
+                suggested_questions=rp["point"].get("suggested_questions", []),
+                exercises=rp["point"].get("exercises", []),
+                prerequisites=list(rp["point"].get("prerequisites", [])),
+            )
 
-                explicit_prereqs = set(point.get("prerequisites", []))
-                all_prereqs = explicit_prereqs | set(point_module_prereqs)
-
-                self._graph[pid] = all_prereqs
-                self._point_meta[pid] = PointMeta(
-                    id=pid,
-                    name=point.get("name", pid),
-                    module_id=module_id,
-                    module_name=module_name,
-                    difficulty=point.get("difficulty", 1),
-                    estimated_minutes=point.get("estimated_minutes", 30),
-                    key_concepts=point.get("key_concepts", []),
-                    teaching_hints=point.get("teaching_hints", {}),
-                    suggested_questions=point.get("suggested_questions", []),
-                    exercises=point.get("exercises", []),
-                    prerequisites=list(explicit_prereqs),
-                )
+        for rp in raw_points:
+            explicit_prereqs = self._resolve_prereqs(rp["point"].get("prerequisites", []))
+            module_prereqs = self._resolve_prereqs(rp["module_prereqs"])
+            self._graph[rp["pid"]] = explicit_prereqs | module_prereqs
 
         logger.info(f"KnowledgeGraph loaded from syllabus: {len(self._point_meta)} points, {len(self._module_order)} modules")

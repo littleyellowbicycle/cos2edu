@@ -154,10 +154,10 @@ watch(() => props.messages, () => {
 .event-notification {
   margin: 16px 0;
   padding: 20px;
-  background: linear-gradient(135deg, #fff8e1 0%, #fff3e0 100%);
-  border: 2px solid #ff9800;
-  border-radius: 12px;
-  box-shadow: 0 4px 16px rgba(255, 152, 0, 0.15);
+    background: linear-gradient(135deg, var(--color-warning-bg) 0%, var(--color-warning-bg) 100%);
+    border: 2px solid var(--color-warning-border);
+    border-radius: 12px;
+    box-shadow: 0 4px 16px rgba(255, 152, 0, 0.15);
 }
 
 .event-notification-header {
@@ -172,7 +172,7 @@ watch(() => props.messages, () => {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
-  color: #e65100;
+  color: var(--color-warning);
 }
 
 .event-notification-icon {
@@ -215,15 +215,15 @@ watch(() => props.messages, () => {
   font-weight: 600;
   text-align: left;
   background: white;
-  border: 2px solid #ff9800;
+  border: 2px solid var(--color-warning-border);
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
-  color: #e65100;
+  color: var(--color-warning);
 }
 
 .event-option-btn:hover {
-  background: #fff3e0;
+  background: var(--color-warning-bg);
   border-color: #f57c00;
   transform: translateX(4px);
 }
@@ -238,7 +238,7 @@ watch(() => props.messages, () => {
   font-family: var(--font-body);
   font-size: 13px;
   font-weight: 600;
-  background: #ff9800;
+  background: var(--color-warning-border);
   color: white;
   border: none;
   border-radius: 6px;

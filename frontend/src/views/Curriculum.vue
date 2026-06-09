@@ -266,8 +266,10 @@ function isPointUnlocked(point, mod) {
   return point.prerequisites.every(pre => isPointMastered(pre))
 }
 
-function getPointMastery() {
-  return narrative.progress.mastery || 0
+function getPointMastery(pointId) {
+  if (narrative.progress.masteredPoints?.includes(pointId)) return 1
+  if (narrative.progress.currentPoint === pointId) return narrative.progress.mastery || 0
+  return 0
 }
 
 function getPointIcon(point, mod) {
