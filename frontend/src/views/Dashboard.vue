@@ -11,34 +11,30 @@
 
     <template v-else>
       <div class="stats-grid">
-        <el-card class="stat-card" shadow="hover">
-          <div class="stat-icon mastered"><el-icon><CircleCheck /></el-icon></div>
-          <div class="stat-info">
-            <div class="stat-value">{{ stats.mastered }}</div>
-            <div class="stat-label">已掌握</div>
-          </div>
-        </el-card>
-        <el-card class="stat-card" shadow="hover">
-          <div class="stat-icon learning"><el-icon><Loading /></el-icon></div>
-          <div class="stat-info">
-            <div class="stat-value">{{ stats.learning }}</div>
-            <div class="stat-label">学习中</div>
-          </div>
-        </el-card>
-        <el-card class="stat-card" shadow="hover">
-          <div class="stat-icon locked"><el-icon><Lock /></el-icon></div>
-          <div class="stat-info">
-            <div class="stat-value">{{ stats.locked }}</div>
-            <div class="stat-label">未解锁</div>
-          </div>
-        </el-card>
-        <el-card class="stat-card" shadow="hover">
-          <div class="stat-icon rate"><el-icon><TrendCharts /></el-icon></div>
-          <div class="stat-info">
-            <div class="stat-value">{{ stats.completion_rate }}%</div>
-            <div class="stat-label">完成率</div>
-          </div>
-        </el-card>
+        <StatCard
+          :value="stats.mastered"
+          label="已掌握"
+          :icon="CircleCheck"
+          icon-class="mastered"
+        />
+        <StatCard
+          :value="stats.learning"
+          label="学习中"
+          :icon="Loading"
+          icon-class="learning"
+        />
+        <StatCard
+          :value="stats.locked"
+          label="未解锁"
+          :icon="Lock"
+          icon-class="locked"
+        />
+        <StatCard
+          :value="`${stats.completion_rate}%`"
+          label="完成率"
+          :icon="TrendCharts"
+          icon-class="rate"
+        />
       </div>
 
       <div class="progress-section">
@@ -59,7 +55,12 @@
             <span>知识点详情</span>
           </template>
           <el-table :data="pointDetails" stripe style="width: 100%">
-            <el-table-column prop="point_id" label="知识点" min-width="180" />
+            <el-table-column label="知识点" min-width="180">
+              <template #default="{ row }">
+                <span class="point-name">{{ row.point_name || row.point_id }}</span>
+                <span v-if="row.point_name" class="point-id">ID: {{ row.point_id }}</span>
+              </template>
+            </el-table-column>
             <el-table-column prop="status" label="状态" width="100">
               <template #default="{ row }">
                 <el-tag :type="statusType(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
@@ -96,6 +97,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { CircleCheck, Loading, Lock, TrendCharts } from '@element-plus/icons-vue'
 import { apiClient } from '@/api'
+import StatCard from '@/components/dashboard/StatCard.vue'
 
 const loading = ref(true)
 const dashboardData = ref(null)
@@ -173,38 +175,6 @@ onMounted(async () => {
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
-.stat-card {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.stat-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 24px;
-}
-
-.stat-icon.mastered { background: #e8f5e9; color: #67c23a; }
-.stat-icon.learning { background: #e3f2fd; color: #409eff; }
-.stat-icon.locked { background: #f5f5f5; color: #909399; }
-.stat-icon.rate { background: #fff3e0; color: #e6a23c; }
-
-.stat-value {
-  font-size: 28px;
-  font-weight: 700;
-  color: var(--color-ink);
-}
-
-.stat-label {
-  font-size: 13px;
-  color: var(--color-text-muted);
-}
-
 .progress-section, .points-section {
   margin-bottom: 24px;
 }
@@ -224,5 +194,19 @@ onMounted(async () => {
 .actions-section {
   display: flex;
   gap: 12px;
+}
+
+.point-name {
+  display: block;
+  font-weight: 500;
+  color: var(--color-ink);
+}
+
+.point-id {
+  display: block;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono, monospace);
+  margin-top: 2px;
 }
 </style>

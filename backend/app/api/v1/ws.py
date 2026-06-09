@@ -284,17 +284,17 @@ async def websocket_endpoint(
                         },
                     }, ensure_ascii=False))
 
+            elif msg_type == "ui.interact":
+                component_id = payload.get("component_id", "")
+                action = payload.get("action", "")
+                value = payload.get("value", "")
+                logger.info(f"UI interact: component={component_id}, action={action}")
+
             else:
                 await websocket.send_text(json.dumps({
                     "type": "error",
                     "content": f"未知的消息类型: {msg_type}",
                 }))
-
-        elif msg_type == "ui.interact":
-            component_id = payload.get("component_id", "")
-            action = payload.get("action", "")
-            value = payload.get("value", "")
-            logger.info(f"UI interact: component={component_id}, action={action}")
 
     except WebSocketDisconnect:
         logger.info(f"WebSocket disconnected: {client_id}")

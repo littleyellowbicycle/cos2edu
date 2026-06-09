@@ -153,20 +153,12 @@
         </div>
       </section>
 
-      <section class="settings-section test-section">
-        <h2 class="section-title">测试连接</h2>
-        <p class="section-description">保存配置后，可以测试 AI 连接是否正常。</p>
-        <button 
-          class="btn-test" 
-          @click="testConnection"
-          :disabled="testing || !canTest"
-        >
-          {{ testing ? '测试中...' : '测试 AI 连接' }}
-        </button>
-        <div v-if="testResult" class="test-result" :class="testResult.type">
-          {{ testResult.message }}
-        </div>
-      </section>
+      <TestConnectionSection
+        :testing="testing"
+        :can-test="canTest"
+        :test-result="testResult"
+        @test="testConnection"
+      />
     </main>
   </div>
 </template>
@@ -176,6 +168,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import api from '@/api'
+import TestConnectionSection from '@/components/settings/TestConnectionSection.vue'
 
 const router = useRouter()
 const loading = ref(true)
@@ -796,41 +789,6 @@ async function testConnection() {
 
 .config-value.key-configured {
   color: #2E7D32;
-}
-
-.test-section {
-  text-align: center;
-}
-
-.btn-test {
-  font-family: var(--font-body);
-  font-size: 15px;
-  font-weight: 600;
-  padding: 14px 32px;
-  background: var(--color-surface);
-  color: var(--color-ink);
-  border: 2px solid var(--color-ink);
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  margin-bottom: 20px;
-}
-
-.btn-test:hover:not(:disabled) {
-  background: var(--color-ink);
-  color: white;
-}
-
-.btn-test:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.test-result {
-  font-size: 14px;
-  padding: 12px 20px;
-  border-radius: 6px;
-  margin-top: 16px;
 }
 
 .test-result.success {

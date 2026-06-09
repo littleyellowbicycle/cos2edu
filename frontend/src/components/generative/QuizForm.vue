@@ -4,7 +4,7 @@
       <span class="quiz-icon">&#9733;</span>
       <h3>知识点测验：{{ quizData.point_name }}</h3>
     </div>
-    <div v-for="(q, qi) in questions" :key="qi" class="quiz-question">
+    <div v-for="(q, qi) in quizQuestions" :key="qi" class="quiz-question">
       <p class="question-text">{{ q.question_text }}</p>
       <div v-if="q.question_type === 'choice'" class="question-options">
         <label
@@ -65,11 +65,11 @@ const resultData = computed(() => narrativeStore.assessmentResult)
 const showQuiz = computed(() => !!quizData.value && !resultData.value)
 const showResult = computed(() => !!resultData.value)
 
-const questions = computed(() => quizData.value?.quiz?.questions || [])
+const quizQuestions = computed(() => quizData.value?.quiz?.questions || props.questions || [])
 
 const allAnswered = computed(() => {
-  if (!questions.value.length) return false
-  return questions.value.every((q, i) => {
+  if (!quizQuestions.value.length) return false
+  return quizQuestions.value.every((q, i) => {
     const answer = answers.value[i]
     return answer && String(answer).trim().length > 0
   })

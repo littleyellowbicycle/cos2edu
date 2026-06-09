@@ -1,5 +1,5 @@
 :root {
-  /* === Warm Light Theme (primary, used by Chat.vue and most views) === */
+  /* === Warm Light Theme === */
   --color-bg: #FAF8F5;
   --color-bg-warm: #F5F1EB;
   --color-surface: #FFFFFF;
@@ -15,26 +15,9 @@
   --shadow-md: 0 4px 12px rgba(44, 36, 22, 0.08);
   --shadow-lg: 0 12px 40px rgba(44, 36, 22, 0.12);
 
-  /* === Dark Theme (used by Home, Dashboard, Timeline, Scene) === */
-  --bg-deep: #0d0c0a;
-  --bg-surface: #151412;
-  --bg-elevated: #1c1a17;
-  --bg-hover: #252220;
-
-  --amber-glow: #d4a574;
-  --amber-bright: #e8c088;
-  --amber-dim: #a67c4e;
-  --amber-dark: #6b4c32;
-
-  --text-primary: #e8e4dc;
-  --text-secondary: #a8a090;
-  --text-muted-dark: #6b6560;
-
-  --border-subtle: rgba(212, 165, 116, 0.12);
-  --border-accent: rgba(212, 165, 116, 0.3);
-
-  --shadow-glow: 0 0 40px rgba(212, 165, 116, 0.08);
-  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.4);
+  /* === Element Plus Light Overrides === */
+  --el-dialog-light-bg: var(--color-surface);
+  --el-dialog-light-border: var(--color-border);
 
   /* === Fonts === */
   --font-display: 'Cormorant Garamond', 'Noto Serif SC', Georgia, serif;

@@ -1,47 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Noto+Serif+SC:wght@400;600;700&family=Source+Sans+3:wght@300;400;600;700&family=Space+Mono:wght@400;700&display=swap');
-@import './variables.css';
-
-*, *::before, *::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
 
 html {
   scroll-behavior: smooth;
-}
-
-body {
-  font-family: var(--font-body);
-  background-color: var(--bg-deep);
-  color: var(--text-primary);
-  line-height: 1.7;
-  min-height: 100vh;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-::selection {
-  background: rgba(212, 165, 116, 0.3);
-  color: var(--text-primary);
-}
-
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: var(--bg-surface);
-}
-
-::-webkit-scrollbar-thumb {
-  background: var(--amber-dark);
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: var(--amber-dim);
 }
 
 @keyframes fadeInUp {
@@ -75,6 +35,10 @@ body {
   100% { background-position: 200% center; }
 }
 
+@keyframes mermaid-spin {
+  to { transform: rotate(360deg); }
+}
+
 .animate-fade-in-up {
   animation: fadeInUp 0.6s ease-out forwards;
 }
@@ -101,65 +65,61 @@ body {
   border: 0;
 }
 
-#app {
-  min-height: 100vh;
-}
-
 .el-button {
   font-family: var(--font-body) !important;
 }
 
 .el-dialog {
-  --el-dialog-bg-color: var(--bg-elevated) !important;
+  --el-dialog-bg-color: var(--color-surface) !important;
   --el-dialog-title-font-size: 1.25rem !important;
-  border: 1px solid var(--border-subtle) !important;
+  border: 1px solid var(--color-border) !important;
   border-radius: 4px !important;
 }
 
 .el-dialog__title {
   font-family: var(--font-display) !important;
-  color: var(--amber-glow) !important;
+  color: var(--color-ink) !important;
 }
 
 .el-form-item__label {
-  color: var(--text-secondary) !important;
+  color: var(--color-text-muted) !important;
   font-family: var(--font-body) !important;
 }
 
 .el-input__wrapper {
-  background-color: var(--bg-surface) !important;
-  border-color: var(--border-subtle) !important;
+  background-color: var(--color-surface) !important;
+  border-color: var(--color-border) !important;
   box-shadow: none !important;
 }
 
 .el-input__inner {
-  color: var(--text-primary) !important;
+  color: var(--color-text) !important;
 }
 
 .el-input__inner::placeholder {
-  color: var(--text-muted-dark) !important;
+  color: var(--color-text-muted) !important;
 }
 
 .el-input__wrapper:hover {
-  border-color: var(--border-accent) !important;
+  border-color: var(--color-accent-light) !important;
 }
 
 .el-input__wrapper.is-focus {
-  border-color: var(--amber-dim) !important;
+  border-color: var(--color-accent) !important;
 }
 
 .el-textarea__inner {
-  background-color: var(--bg-surface) !important;
-  border-color: var(--border-subtle) !important;
-  color: var(--text-primary) !important;
+  background-color: var(--color-surface) !important;
+  border-color: var(--color-border) !important;
+  color: var(--color-text) !important;
   box-shadow: none !important;
 }
 
 .el-textarea__inner:focus {
-  border-color: var(--amber-dim) !important;
+  border-color: var(--color-accent) !important;
 }
 
 .el-message {
-  --el-message-bg-color: var(--bg-elevated) !important;
-  border-color: var(--border-accent) !important;
+  --el-message-bg-color: var(--color-surface) !important;
+  border-color: var(--color-border) !important;
 }

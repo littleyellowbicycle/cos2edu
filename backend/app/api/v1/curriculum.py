@@ -420,8 +420,18 @@ async def get_point_progress(request: Request, point_id: str):
 @limiter.limit("30/minute")
 async def get_progress_summary(request: Request):
     """Get overall learning progress summary for the dashboard"""
+    point_name_map: dict[str, str] = {}
     async with UnitOfWork() as uow:
         all_progress = await uow.learning_progress.get_all()
+        approved_syllabi = await uow.syllabuses.get_approved()
+        for syllabus in approved_syllabi:
+            content = syllabus.content or {}
+            for mod in content.get("modules", []):
+                for kp in mod.get("knowledge_points", []):
+                    pid = kp.get("id")
+                    pname = kp.get("name")
+                    if pid and pname and pid not in point_name_map:
+                        point_name_map[pid] = pname
 
     total = len(all_progress)
     mastered = sum(1 for p in all_progress if p.status == "mastered")
@@ -433,6 +443,7 @@ async def get_progress_summary(request: Request):
     for p in all_progress:
         point_details.append({
             "point_id": p.knowledge_point_id,
+            "point_name": point_name_map.get(p.knowledge_point_id),
             "status": p.status,
             "mastery_level": round(p.mastery_level, 2),
             "attempts": p.attempts,

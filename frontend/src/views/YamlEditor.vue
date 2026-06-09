@@ -95,7 +95,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import api from '@/api'
 import YamlPreview from '@/components/YamlPreview.vue'
@@ -119,15 +119,24 @@ const parseError = ref('')
 const parsedData = computed(() => {
   if (!yamlContent.value) return null
   try {
-    const jsYaml = require('js-yaml')
-    const data = jsYaml.load(yamlContent.value)
-    parseError.value = ''
-    return data
-  } catch (e) {
-    parseError.value = e.message
+    return require('js-yaml').load(yamlContent.value)
+  } catch {
     return null
   }
 })
+
+watch(yamlContent, (val) => {
+  if (!val) {
+    parseError.value = ''
+    return
+  }
+  try {
+    require('js-yaml').load(val)
+    parseError.value = ''
+  } catch (e) {
+    parseError.value = e.message
+  }
+}, { immediate: true })
 
 async function loadFileList() {
   try {

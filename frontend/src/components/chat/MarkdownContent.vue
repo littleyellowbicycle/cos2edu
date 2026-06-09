@@ -53,11 +53,26 @@ customRenderer.table = function (data) {
   return `<div class="ai-table-wrapper"><table class="ai-table"><thead><tr>${headers}</tr></thead><tbody>${rows}</tbody></table></div>`
 }
 
+const calloutTypeMap = {
+  '💡': 'tip', '✅': 'tip', '👍': 'tip', '⭐': 'tip',
+  '⚠️': 'warning', '⚠': 'warning', '❗': 'warning',
+  '❌': 'error', '⛔': 'error', '🚫': 'error',
+  '📝': 'info', 'ℹ️': 'info', '📌': 'info',
+}
+
+function detectCalloutType(emoji) {
+  for (const key of Object.keys(calloutTypeMap)) {
+    if (emoji.includes(key)) return calloutTypeMap[key]
+  }
+  return 'info'
+}
+
 customRenderer.blockquote = function (data) {
   const text = data.text
   const match = text.match(emojiSectionRegex)
   if (match) {
-    return `<div class="ai-callout"><span class="ai-callout-emoji">${match[1]}</span><div class="ai-callout-content">${match[2]}${text.replace(match[0], '')}</div></div>`
+    const type = detectCalloutType(match[1])
+    return `<div class="ai-callout ai-callout--${type}"><span class="ai-callout-emoji">${match[1]}</span><div class="ai-callout-content">${match[2]}${text.replace(match[0], '')}</div></div>`
   }
   return `<blockquote class="ai-blockquote">${text}</blockquote>`
 }
@@ -91,7 +106,12 @@ customRenderer.code = function (data) {
   if (lang === 'mermaid') {
     return `<pre class="mermaid">${code}</pre>`
   }
-  return `<div class="ai-code-block"><div class="ai-code-header"><span class="ai-code-lang">${lang || 'code'}</span></div><pre class="ai-code-content"><code>${code}</code></pre></div>`
+  const safeCode = code
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+  return `<div class="ai-code-block"><div class="ai-code-header"><span class="ai-code-lang">${lang || 'code'}</span><button type="button" class="ai-code-copy" data-code="${safeCode}">复制</button></div><pre class="ai-code-content"><code>${code}</code></pre></div>`
 }
 
 marked.setOptions({
@@ -133,8 +153,9 @@ async function renderMermaid(element) {
   const mermaidBlocks = element.querySelectorAll('pre.mermaid')
   for (const block of mermaidBlocks) {
     const code = block.textContent
+    block.classList.add('mermaid-loading')
     try {
-      const id = 'mermaid-' + Math.random().toString(36).substr(2, 9)
+      const id = 'mermaid-' + Math.random().toString(36).substring(2, 11)
       const { svg } = await mermaid.render(id, code)
       const wrapper = document.createElement('div')
       wrapper.className = 'mermaid-svg'
@@ -145,6 +166,32 @@ async function renderMermaid(element) {
       block.textContent = code
     }
   }
+}
+
+const boundButtons = new WeakSet()
+
+function bindCopyButtons(element) {
+  const buttons = element.querySelectorAll('.ai-code-copy')
+  buttons.forEach(btn => {
+    if (boundButtons.has(btn)) return
+    boundButtons.add(btn)
+    btn.addEventListener('click', async () => {
+      const code = btn.getAttribute('data-code') || ''
+      try {
+        await navigator.clipboard.writeText(code)
+        const original = btn.textContent
+        btn.textContent = '已复制'
+        btn.classList.add('copied')
+        setTimeout(() => {
+          btn.textContent = original
+          btn.classList.remove('copied')
+        }, 1500)
+      } catch (e) {
+        btn.textContent = '失败'
+        setTimeout(() => { btn.textContent = '复制' }, 1500)
+      }
+    })
+  })
 }
 
 mermaid.initialize({
@@ -172,7 +219,10 @@ const renderedHtml = computed(() => {
 watch(renderedHtml, () => {
   nextTick(() => {
     if (contentRef.value) {
-      renderMermaid(contentRef.value)
+      bindCopyButtons(contentRef.value)
+      if (!props.streaming) {
+        renderMermaid(contentRef.value)
+      }
       emit('rendered')
     }
   })
@@ -181,6 +231,7 @@ watch(renderedHtml, () => {
 onMounted(() => {
   if (contentRef.value) {
     renderMermaid(contentRef.value)
+    bindCopyButtons(contentRef.value)
   }
 })
 </script>
@@ -235,243 +286,9 @@ onMounted(() => {
   50% { opacity: 0; }
 }
 
-.message-footer {
-  display: flex;
-  gap: 4px;
-  margin-top: 8px;
-  opacity: 0;
-  transition: opacity 0.2s;
-}
-
-.message-content:hover .message-footer {
-  opacity: 1;
-}
-
-.msg-action-btn {
-  background: none;
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-  padding: 2px 8px;
-  font-size: 12px;
-  cursor: pointer;
-  color: var(--color-text-muted);
-  transition: all 0.15s;
-}
-
-.msg-action-btn:hover {
-  background: var(--color-bg-warm);
-  color: var(--color-ink);
-}
-
-.message-time {
-  font-size: 12px;
-  color: var(--color-text-muted);
-}
-
-.message.user .message-time {
-  text-align: right;
-}
-
-.typing-indicator {
-  display: flex;
-  gap: 4px;
-  padding: 20px 24px;
-}
-
-.typing-indicator span {
-  width: 8px;
-  height: 8px;
-  background: var(--color-text-muted);
-  border-radius: 50%;
-  animation: typing 1.4s infinite;
-}
-
-.typing-indicator span:nth-child(2) {
-  animation-delay: 0.2s;
-}
-
-.typing-indicator span:nth-child(3) {
-  animation-delay: 0.4s;
-}
-
-.input-area {
-  padding: 20px 32px 24px;
-  background: var(--color-surface);
-  border-top: 1px solid var(--color-border);
-}
-
-.input-wrapper {
-  display: flex;
-  gap: 12px;
-  align-items: stretch;
-  position: relative;
-}
-
-.input-wrapper textarea {
-  flex: 1;
-  font-family: var(--font-body);
-  font-size: 15px;
-  line-height: 1.5;
-  padding: 14px 18px;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  background: var(--color-bg);
-  color: var(--color-text);
-  resize: none;
-  min-height: 52px;
-  max-height: 150px;
-  transition: border-color 0.2s;
-  pointer-events: auto;
-  z-index: 1;
-  width: 100%;
-}
-
-.input-wrapper textarea:focus {
-  outline: none;
-  border-color: var(--color-accent);
-}
-
-.input-wrapper textarea::placeholder {
-  color: var(--color-text-muted);
-}
-
-.input-wrapper textarea:disabled {
-  background: var(--color-bg-warm);
-  cursor: not-allowed;
-}
-
-.btn-send {
-  height: 52px;
-  padding: 0 28px;
-  font-family: var(--font-body);
-  font-size: 15px;
-  font-weight: 600;
-  background: var(--color-ink);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.btn-send:hover:not(:disabled) {
-  background: var(--color-accent);
-}
-
-.btn-send:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.sending-dots {
-  animation: pulse 1s infinite;
-}
-
-.input-hint {
-  font-size: 12px;
-  color: var(--color-text-muted);
-  margin-top: 8px;
-  text-align: center;
-}
-
-.chat-sidebar {
-  width: 300px;
-  background: var(--color-surface);
-  border-left: 1px solid var(--color-border);
-  display: flex;
-  flex-direction: column;
-}
-
-.sidebar-title {
-  font-family: var(--font-display);
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--color-ink);
-  padding: 20px 24px;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.history-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 12px;
-}
-
-.history-item {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  padding: 14px 16px;
-  background: transparent;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-align: left;
-}
-
-.history-item:hover {
-  background: var(--color-bg);
-}
-
-.history-item.active {
-  background: var(--color-bg-warm);
-  border-left: 3px solid var(--color-accent);
-}
-
-.history-title {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--color-text);
-}
-
-.history-date {
-  font-size: 12px;
-  color: var(--color-text-muted);
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes typing {
-  0%, 60%, 100% { transform: translateY(0); }
-  30% { transform: translateY(-4px); }
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
-
-@media (max-width: 768px) {
-  .chat-header {
-    padding: 16px 20px;
-  }
-  
-  .messages {
-    padding: 20px;
-  }
-  
-  .message {
-    max-width: 90%;
-  }
-  
-  .input-area {
-    padding: 16px 20px;
-  }
-  
-  .chat-sidebar {
-    position: fixed;
-    right: 0;
-    top: 0;
-    bottom: 0;
-    z-index: 100;
-    box-shadow: var(--shadow-lg);
-  }
+@keyframes mermaid-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 .markdown-content :deep(.math-block) {
@@ -495,6 +312,31 @@ onMounted(() => {
 .markdown-content :deep(.mermaid-svg svg) {
   max-width: 100%;
   height: auto;
+}
+
+.markdown-content :deep(.mermaid-loading) {
+  position: relative;
+  min-height: 80px;
+  background: var(--color-bg-warm);
+  border: 1px dashed var(--color-border);
+  border-radius: 8px;
+  padding: 16px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.markdown-content :deep(.mermaid-loading::after) {
+  content: '';
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-accent);
+  border-radius: 50%;
+  animation: mermaid-spin 0.8s linear infinite;
 }
 
 .markdown-content :deep(.mermaid-error) {
@@ -609,6 +451,7 @@ border-radius: 4px;
   overflow-x: auto;
   border-radius: 8px;
   border: 1px solid var(--color-border);
+  -webkit-overflow-scrolling: touch;
 }
 
 .markdown-content :deep(.ai-table ){
@@ -643,7 +486,12 @@ border-radius: 4px;
 }
 
 .markdown-content :deep(.ai-table tbody tr:hover ) {
-  background: rgba(0, 0, 0, 0.03);
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.markdown-content :deep(.ai-table tbody tr:nth-child(even):hover ) {
+  background: var(--color-bg-warm);
+  filter: brightness(0.96);
 }
 
 .markdown-content :deep(.ai-callout ) {
@@ -655,6 +503,26 @@ border-radius: 4px;
   border-radius: 8px;
   background: linear-gradient(135deg, var(--color-bg-warm), var(--color-surface));
   border: 1px solid var(--color-border);
+  border-left-width: 4px;
+}
+
+.markdown-content :deep(.ai-callout--tip ) {
+  border-left-color: #2e7d32;
+  background: linear-gradient(135deg, #f1f8e9, var(--color-surface));
+}
+
+.markdown-content :deep(.ai-callout--warning ) {
+  border-left-color: #e65100;
+  background: linear-gradient(135deg, #fff3e0, var(--color-surface));
+}
+
+.markdown-content :deep(.ai-callout--error ) {
+  border-left-color: #c62828;
+  background: linear-gradient(135deg, #ffebee, var(--color-surface));
+}
+
+.markdown-content :deep(.ai-callout--info ) {
+  border-left-color: var(--color-accent);
 }
 
 .markdown-content :deep(.ai-callout-emoji ){
@@ -698,11 +566,37 @@ border-radius: 4px;
   color: rgba(255, 255, 255, 0.7);
   font-size: 12px;
   font-family: var(--font-body);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .markdown-content :deep(.ai-code-lang ){
   text-transform: uppercase;
   letter-spacing: 0.05em;
+}
+
+.markdown-content :deep(.ai-code-copy ) {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  padding: 2px 10px;
+  font-size: 12px;
+  font-family: var(--font-body);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.markdown-content :deep(.ai-code-copy:hover ) {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+.markdown-content :deep(.ai-code-copy.copied ) {
+  background: #2e7d32;
+  border-color: #2e7d32;
+  color: white;
 }
 
 .markdown-content :deep(.ai-code-content ) {

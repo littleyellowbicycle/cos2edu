@@ -26,6 +26,7 @@
         type="file"
         accept=".png"
         style="display: none"
+        aria-hidden="true"
         @change="handleImportFile"
       />
     </header>
@@ -44,30 +45,18 @@
       </div>
 
       <div v-else class="characters-grid">
-        <article 
-          v-for="(char, index) in characters" 
-          :key="char.id" 
-          class="character-card"
-          :style="{ animationDelay: `${index * 100}ms` }"
-        >
-          <div class="card-avatar">
-            <div class="avatar-placeholder" :style="getAvatarStyle(char)">{{ getAvatarDisplay(char) }}</div>
-          </div>
-          <div class="card-content">
-            <h3 class="card-title">{{ char.name }}</h3>
-            <p class="card-description">{{ char.description || '暂无描述' }}</p>
-            <div class="card-tags">
-              <span class="tag" v-if="char.personality">{{ char.personality }}</span>
-              <span class="mood-tag" :class="getCharacterMoodClass(char)" v-if="getCharacterMoodLabel(char)">{{ getCharacterMoodLabel(char) }}</span>
-            </div>
-          </div>
-          <div class="card-actions">
-            <button class="btn-chat" @click="openMaterialSelector(char)">开始对话</button>
-            <button class="btn-edit" @click="editCharacter(char)">编辑</button>
-            <button class="btn-export" @click="exportCard(char)" title="导出角色卡">📤</button>
-            <button class="btn-delete" @click="deleteCharacter(char.id)">删除</button>
-          </div>
-        </article>
+        <CharacterCard
+          v-for="(char, index) in characters"
+          :key="char.id"
+          :character="char"
+          :mood-label="getCharacterMoodLabel(char)"
+          :mood-class="getCharacterMoodClass(char)"
+          :animation-delay="`${index * 100}ms`"
+          @chat="openMaterialSelector"
+          @edit="editCharacter"
+          @export="exportCard"
+          @delete="deleteCharacter"
+        />
       </div>
     </main>
 
@@ -197,91 +186,12 @@
       </template>
     </el-dialog>
 
-    <el-dialog 
-      title="编辑角色"
-      width="500px"
-      class="character-dialog"
-    >
-      <form @submit.prevent="handleSubmit" class="character-form">
-        <div class="form-group avatar-group">
-          <label>头像</label>
-          <div class="avatar-preview">
-            <div class="avatar-placeholder avatar-preview-img" :style="getAvatarStyle(form)">{{ getAvatarDisplay(form) }}</div>
-          </div>
-          <div class="avatar-type-tabs">
-            <button type="button" :class="{ active: form.avatar_type === 'emoji' }" @click="form.avatar_type = 'emoji'">Emoji</button>
-            <button type="button" :class="{ active: form.avatar_type === 'image' }" @click="form.avatar_type = 'image'">上传图片</button>
-          </div>
-          <div v-if="form.avatar_type === 'emoji'" class="emoji-picker">
-            <input 
-              v-model="form.avatar" 
-              type="text" 
-              placeholder="输入一个emoji，如: 😊"
-              maxlength="10"
-            />
-            <div class="emoji-suggestions">
-              <span v-for="e in emojiSuggestions" :key="e" @click="form.avatar = e" class="emoji-item">{{ e }}</span>
-            </div>
-          </div>
-          <div v-else class="image-upload-input">
-            <input 
-              type="file" 
-              accept="image/*"
-              @change="handleAvatarUpload" 
-              ref="avatarInput"
-            />
-            <div v-if="avatarPreview" class="avatar-upload-preview">
-              <img :src="avatarPreview" alt="头像预览" />
-              <button type="button" class="remove-avatar" @click="removeAvatar">✕</button>
-            </div>
-            <p v-else class="upload-hint">点击选择图片文件（支持 JPG、PNG、GIF、WebP）</p>
-          </div>
-        </div>
-        <div class="form-group">
-          <label for="name">名称</label>
-          <input 
-            id="name" 
-            v-model="form.name" 
-            type="text" 
-            placeholder="例如：苏格拉底"
-            required
-          />
-        </div>
-        <div class="form-group">
-          <label for="description">描述</label>
-          <textarea 
-            id="description" 
-            v-model="form.description" 
-            placeholder="角色的简要描述"
-            rows="3"
-          ></textarea>
-        </div>
-        <div class="form-group">
-          <label for="personality">性格特点</label>
-          <input 
-            id="personality" 
-            v-model="form.personality" 
-            type="text" 
-            placeholder="例如：善于提问、循循善诱"
-          />
-        </div>
-        <div class="form-group">
-          <label for="background">背景故事</label>
-          <textarea 
-            id="background" 
-            v-model="form.background" 
-            placeholder="角色的背景故事（可选）"
-            rows="4"
-          ></textarea>
-        </div>
-      </form>
-      <template #footer>
-        <button class="btn-cancel" @click="showCreateDialog = false">取消</button>
-        <button class="btn-submit" @click="handleSubmit">
-          {{ editingCharacter ? '保存' : '创建' }}
-        </button>
-      </template>
-    </el-dialog>
+    <CharacterEditDialog
+      :visible="showCreateDialog"
+      :character="editingCharacter"
+      @update:visible="showCreateDialog = $event"
+      @saved="onCharacterSaved"
+    />
   </div>
 </template>
 
@@ -291,8 +201,10 @@ import { useRouter } from 'vue-router'
 import { useCharacterStore } from '@/stores/character'
 import { useNarrativeStore } from '@/stores/narrative'
 import { useWebSocket } from '@/composables/useWebSocket'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '@/api'
+import CharacterCard from '@/components/characters/CharacterCard.vue'
+import CharacterEditDialog from '@/components/characters/CharacterEditDialog.vue'
 
 const router = useRouter()
 const store = useCharacterStore()
@@ -350,144 +262,32 @@ const filteredMaterials = computed(() => {
   )
 })
 
-const form = ref({
-  name: '',
-  description: '',
-  personality: '',
-  background: '',
-  avatar: '',
-  avatar_type: 'emoji'
-})
-
 const importFileInput = ref(null)
 const showImportResult = ref(false)
 const importResult = ref(null)
 const importing = ref(false)
 
-const emojiSuggestions = ['😊', '😎', '🤔', '👍', '🎓', '📚', '💡', '🌟', '😃', '🤓', '🧐', '✨']
-const avatarPreview = ref('')
-const avatarInput = ref(null)
-
-function handleAvatarUpload(event) {
-  const file = event.target.files[0]
-  if (!file) return
-
-  if (file.size > 5 * 1024 * 1024) {
-    ElMessage.error('图片大小不能超过 5MB')
-    return
-  }
-
-  const reader = new FileReader()
-  reader.onload = (e) => {
-    form.value.avatar = file
-    avatarPreview.value = e.target.result
-  }
-  reader.onerror = () => {
-    ElMessage.error('文件读取失败')
-  }
-  reader.readAsDataURL(file)
-}
-
-function removeAvatar() {
-  form.value.avatar = ''
-  avatarPreview.value = ''
-  if (avatarInput.value) {
-    avatarInput.value.value = ''
-  }
-}
-
-function getAvatarDisplay(item) {
-  if (item.avatar_type === 'emoji' && item.avatar) {
-    return item.avatar
-  }
-  if (item.avatar_type === 'image') {
-    return ''
-  }
-  return item.name ? item.name.charAt(0) : '?'
-}
-
-function getAvatarStyle(item) {
-  if (item.avatar_type === 'image' && item.avatar) {
-    if (typeof item.avatar === 'string') {
-      if (item.avatar.startsWith('data:') || item.avatar.startsWith('http')) {
-        return { backgroundImage: `url(${item.avatar})`, backgroundSize: 'cover', backgroundPosition: 'center' }
-      }
-      if (item.avatar.startsWith('/')) {
-        return { backgroundImage: `url(${item.avatar})`, backgroundSize: 'cover', backgroundPosition: 'center' }
-      }
-      return { backgroundImage: `url(/api/v1/crud/avatars/${item.avatar})`, backgroundSize: 'cover', backgroundPosition: 'center' }
-    }
-  }
-  return {}
-}
-
-onMounted(async () => {
-  try {
-    await store.fetchAll()
-    characters.value = store.characters
-  } finally {
-    loading.value = false
-  }
-})
-
-async function handleSubmit() {
-  if (!form.value.name.trim()) {
-    ElMessage.warning('请输入角色名称')
-    return
-  }
-  
-  try {
-    const data = new FormData()
-    data.append('name', form.value.name)
-    data.append('description', form.value.description || '')
-    data.append('personality', form.value.personality || '')
-    data.append('background', form.value.background || '')
-    data.append('avatar_type', form.value.avatar_type)
-    
-    if (form.value.avatar_type === 'image' && form.value.avatar instanceof File) {
-      data.append('avatar', form.value.avatar)
-    } else if (form.value.avatar_type === 'emoji') {
-      data.append('avatar', form.value.avatar)
-    }
-    
-    if (editingCharacter.value) {
-      await store.update(editingCharacter.value.id, data)
-      ElMessage.success('角色已更新')
-    } else {
-      await store.create(data)
-      ElMessage.success('角色已创建')
-    }
-    characters.value = store.characters
-    closeDialog()
-  } catch (e) {
-    ElMessage.error('操作失败')
-  }
-}
-
 function editCharacter(char) {
   editingCharacter.value = char
-  form.value = {
-    name: char.name,
-    description: char.description || '',
-    personality: char.personality || '',
-    background: char.background || '',
-    avatar: char.avatar || '',
-    avatar_type: char.avatar_type || 'emoji'
-  }
-  avatarPreview.value = ''
-  if (char.avatar_type === 'image' && char.avatar) {
-    if (char.avatar.startsWith('data:') || char.avatar.startsWith('http')) {
-      avatarPreview.value = char.avatar
-    } else if (char.avatar.startsWith('/')) {
-      avatarPreview.value = char.avatar
-    } else {
-      avatarPreview.value = `/api/v1/avatars/${char.avatar}`
-    }
-  }
   showCreateDialog.value = true
 }
 
 async function deleteCharacter(id) {
+  const target = characters.value.find(c => c.id === id)
+  const name = target?.name || '该角色'
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除「${name}」吗？此操作不可恢复。`,
+      '删除角色',
+      {
+        confirmButtonText: '删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+      }
+    )
+  } catch {
+    return
+  }
   try {
     await store.delete(id)
     characters.value = store.characters
@@ -524,14 +324,14 @@ async function startChatWithMaterial() {
   }
 }
 
-function startChat(char) {
-  router.push(`/chat/${char.id}`)
-}
-
 function closeDialog() {
   showCreateDialog.value = false
   editingCharacter.value = null
-  form.value = { name: '', description: '', personality: '', background: '', avatar: '', avatar_type: 'emoji' }
+}
+
+function onCharacterSaved() {
+  characters.value = store.characters
+  closeDialog()
 }
 
 function triggerImport() {
@@ -729,350 +529,6 @@ function truncate(str, maxLen) {
   gap: 32px;
 }
 
-.character-card {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  padding: 32px;
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-  animation: fadeInUp 0.6s ease-out both;
-}
-
-.character-card:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--shadow-lg);
-  border-color: var(--color-accent-light);
-}
-
-.card-avatar {
-  margin-bottom: 24px;
-}
-
-.avatar-placeholder {
-  width: 72px;
-  height: 72px;
-  background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-light) 100%);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-display);
-  font-size: 32px;
-  font-weight: 600;
-  color: white;
-}
-
-.avatar-placeholder.avatar-preview-img {
-  background: none;
-}
-
-.avatar-group {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.avatar-preview {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 8px;
-}
-
-.avatar-preview .avatar-placeholder {
-  width: 96px;
-  height: 96px;
-  font-size: 48px;
-}
-
-.avatar-type-tabs {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.avatar-type-tabs button {
-  flex: 1;
-  padding: 10px 16px;
-  font-size: 14px;
-  font-weight: 600;
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.avatar-type-tabs button.active {
-  background: var(--color-ink);
-  color: white;
-  border-color: var(--color-ink);
-}
-
-.emoji-picker input {
-  width: 100%;
-  padding: 12px 16px;
-  font-size: 18px;
-  text-align: center;
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-  background: var(--color-bg);
-  color: var(--color-text);
-}
-
-.emoji-suggestions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.emoji-item {
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 24px;
-  background: var(--color-bg-warm);
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.emoji-item:hover {
-  background: var(--color-border);
-  transform: scale(1.1);
-}
-
-.image-upload-input input[type="file"] {
-  width: 100%;
-  padding: 12px 16px;
-  font-size: 14px;
-  border: 1px dashed var(--color-border);
-  border-radius: 4px;
-  background: var(--color-bg);
-  color: var(--color-text);
-  cursor: pointer;
-}
-
-.image-upload-input input[type="file"]:hover {
-  border-color: var(--color-accent);
-}
-
-.avatar-upload-preview {
-  position: relative;
-  display: inline-block;
-  margin-top: 12px;
-}
-
-.avatar-upload-preview img {
-  width: 96px;
-  height: 96px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 2px solid var(--color-border);
-}
-
-.remove-avatar {
-  position: absolute;
-  top: -6px;
-  right: -6px;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: #C75050;
-  color: white;
-  border: none;
-  cursor: pointer;
-  font-size: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.remove-avatar:hover {
-  background: #a03939;
-}
-
-.upload-hint {
-  margin-top: 12px;
-  font-size: 13px;
-  color: var(--color-text-muted);
-  text-align: center;
-}
-
-.card-title {
-  font-family: var(--font-display);
-  font-size: 26px;
-  font-weight: 600;
-  color: var(--color-ink);
-  margin-bottom: 8px;
-}
-
-.card-description {
-  font-size: 15px;
-  line-height: 1.6;
-  color: var(--color-text-muted);
-  margin-bottom: 16px;
-}
-
-.card-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 24px;
-}
-
-.tag {
-  font-size: 12px;
-  padding: 4px 12px;
-  background: var(--color-bg-warm);
-  color: var(--color-text-muted);
-  border-radius: 20px;
-  border: 1px solid var(--color-border);
-}
-
-.mood-tag {
-  font-size: 12px;
-  padding: 4px 12px;
-  border-radius: 20px;
-  font-weight: 500;
-}
-
-.mood-tag.mood-positive {
-  background: #e8f5e9;
-  color: #2e7d32;
-  border: 1px solid #a5d6a7;
-}
-
-.mood-tag.mood-neutral {
-  background: #fff3e0;
-  color: #e65100;
-  border: 1px solid #ffcc80;
-}
-
-.mood-tag.mood-negative {
-  background: #ffebee;
-  color: #c62828;
-  border: 1px solid #ef9a9a;
-}
-
-.card-actions {
-  display: flex;
-  gap: 12px;
-  padding-top: 20px;
-  border-top: 1px solid var(--color-border);
-}
-
-.card-actions button {
-  flex: 1;
-  font-family: var(--font-body);
-  font-size: 14px;
-  font-weight: 600;
-  padding: 12px 16px;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.btn-chat {
-  background: var(--color-ink);
-  color: white;
-  border: none;
-}
-
-.btn-chat:hover {
-  background: var(--color-accent);
-}
-
-.btn-edit {
-  background: transparent;
-  color: var(--color-text-muted);
-  border: 1px solid var(--color-border);
-}
-
-.btn-edit:hover {
-  border-color: var(--color-ink);
-  color: var(--color-ink);
-}
-
-.btn-delete {
-  background: transparent;
-  color: #C75050;
-  border: 1px solid #E5C5C5;
-}
-
-.btn-delete:hover {
-  background: #FEF2F2;
-  border-color: #C75050;
-}
-
-.character-dialog :deep(.el-dialog) {
-  border-radius: 8px;
-}
-
-.character-dialog :deep(.el-dialog__header) {
-  padding: 24px 32px;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.character-dialog :deep(.el-dialog__title) {
-  font-family: var(--font-display);
-  font-size: 24px;
-  font-weight: 600;
-  color: var(--color-ink);
-}
-
-.character-dialog :deep(.el-dialog__body) {
-  padding: 32px;
-}
-
-.character-dialog :deep(.el-dialog__footer) {
-  padding: 20px 32px;
-  border-top: 1px solid var(--color-border);
-}
-
-.character-form {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.form-group label {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--color-ink);
-}
-
-.form-group input,
-.form-group textarea {
-  font-family: var(--font-body);
-  font-size: 15px;
-  padding: 12px 16px;
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-  background: var(--color-bg);
-  color: var(--color-text);
-  transition: border-color 0.2s;
-}
-
-.form-group input:focus,
-.form-group textarea:focus {
-  outline: none;
-  border-color: var(--color-accent);
-}
-
-.form-group input::placeholder,
-.form-group textarea::placeholder {
-  color: var(--color-text-muted);
-}
-
 .btn-cancel,
 .btn-submit {
   font-family: var(--font-body);
@@ -1107,17 +563,6 @@ function truncate(str, maxLen) {
 
 @keyframes spin {
   to { transform: rotate(360deg); }
-}
-
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 @media (max-width: 768px) {
@@ -1278,21 +723,6 @@ function truncate(str, maxLen) {
   transform: translateY(-2px);
 }
 
-.btn-export {
-  font-size: 16px;
-  padding: 10px 14px;
-  background: transparent;
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  line-height: 1;
-}
-
-.btn-export:hover {
-  border-color: var(--color-accent);
-  background: var(--color-bg-warm);
-}
 
 .import-result-content {
   display: flex;

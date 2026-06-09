@@ -62,42 +62,16 @@
       </div>
 
       <div v-else class="conversations-list">
-        <article
+        <ConversationCard
           v-for="(conv, index) in conversations"
           :key="conv.id"
-          class="conversation-card"
-          :style="{ animationDelay: `${index * 60}ms` }"
-          @click="continueChat(conv)"
-        >
-          <div class="conversation-info">
-            <div class="conv-avatar" :style="getAvatarStyle(conv)">{{ getAvatarDisplay(conv) }}</div>
-            <div class="conv-details">
-              <div class="conv-title-wrapper" @click.stop="startEditTitle(conv)" v-if="editingConvId !== conv.id">
-                <h3 class="conv-title">{{ conv.title || '未命名对话' }}</h3>
-                <span class="edit-icon">✎</span>
-              </div>
-              <div class="conv-title-edit" v-else>
-                <input
-                  v-model="editingTitle"
-                  @keyup.enter="saveTitle(conv)"
-                  @keyup.escape="cancelEditTitle"
-                  @blur="saveTitle(conv)"
-                  ref="titleInput"
-                  class="title-input"
-                />
-              </div>
-              <p class="conv-meta">
-                <span class="conv-character">{{ conv.character_name || '未知角色' }}</span>
-                <span class="conv-date">{{ formatDate(conv.updated_at || conv.created_at) }}</span>
-              </p>
-              <p v-if="conv.message_count != null" class="conv-msg-count">{{ conv.message_count }} 条消息</p>
-            </div>
-          </div>
-          <div class="conversation-actions">
-            <button class="btn-continue" @click.stop="continueChat(conv)">继续</button>
-            <button class="btn-delete" @click.stop="deleteConversation(conv.id)">删除</button>
-          </div>
-        </article>
+          :conversation="conv"
+          :avatar-display="getAvatarDisplay(conv)"
+          :avatar-style="getAvatarStyle(conv)"
+          :index="index"
+          @delete="deleteConversation"
+          @update-title="handleTitleUpdate"
+        />
       </div>
 
       <div v-if="total > conversations.length" class="pagination">
@@ -118,19 +92,15 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted } from 'vue'
 import { useConversationStore } from '@/stores/conversation'
 import { ElMessage } from 'element-plus'
 import api from '@/api'
+import ConversationCard from '@/components/conversations/ConversationCard.vue'
 
-const router = useRouter()
 const store = useConversationStore()
 const conversations = ref([])
 const loading = ref(true)
-const editingConvId = ref(null)
-const editingTitle = ref('')
-const titleInput = ref(null)
 const searchQuery = ref('')
 const filterCharacter = ref(null)
 const characters = ref([])
@@ -163,8 +133,8 @@ async function doSearch() {
     const result = await api.content.searchConversations(params)
     conversations.value = result.conversations
     total.value = result.total
-  } catch (e) {
-    console.error(e)
+  } catch {
+    // silently ignore
   } finally {
     loading.value = false
   }
@@ -193,8 +163,8 @@ async function loadStats() {
     totalConversations.value = stats.total_conversations
     totalMessages.value = stats.total_messages
     recentCount.value = stats.recent_conversations.length
-  } catch (e) {
-    console.error(e)
+  } catch {
+    // silently ignore
   }
 }
 
@@ -212,37 +182,9 @@ function getAvatarStyle(conv) {
   return {}
 }
 
-function startEditTitle(conv) {
-  editingConvId.value = conv.id
-  editingTitle.value = conv.title || ''
-  nextTick(() => {
-    if (titleInput.value) {
-      titleInput.value.focus()
-    }
-  })
-}
-
-async function saveTitle(conv) {
-  if (!editingTitle.value.trim()) {
-    cancelEditTitle()
-    return
-  }
-  try {
-    await store.update(conv.id, { title: editingTitle.value.trim() })
-    conv.title = editingTitle.value.trim()
-  } catch (e) {
-    console.error(e)
-  }
-  cancelEditTitle()
-}
-
-function cancelEditTitle() {
-  editingConvId.value = null
-  editingTitle.value = ''
-}
-
-function continueChat(conversation) {
-  router.push(`/chat/${conversation.character_id}?conversationId=${conversation.id}`)
+function handleTitleUpdate(id, title) {
+  const conv = conversations.value.find(c => c.id === id)
+  if (conv) conv.title = title
 }
 
 async function deleteConversation(id) {
@@ -250,33 +192,17 @@ async function deleteConversation(id) {
     await store.delete(id)
     doSearch()
     ElMessage.success('对话已删除')
-  } catch (e) {
+  } catch {
     ElMessage.error('删除失败')
   }
-}
-
-function formatDate(dateStr) {
-  if (!dateStr) return ''
-  const date = new Date(dateStr)
-  const now = new Date()
-  const diff = now - date
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24))
-  if (days === 0) return '今天'
-  if (days === 1) return '昨天'
-  if (days < 7) return `${days}天前`
-  return date.toLocaleDateString('zh-CN', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  })
 }
 
 onMounted(async () => {
   try {
     const chars = await api.characters.getAll()
     characters.value = chars
-  } catch (e) {
-    console.error(e)
+  } catch {
+    // silently ignore
   }
   await doSearch()
   await loadStats()
@@ -495,156 +421,6 @@ onMounted(async () => {
   gap: 12px;
 }
 
-.conversation-card {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px 24px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  transition: all 0.3s ease;
-  animation: fadeInUp 0.5s ease-out both;
-  cursor: pointer;
-}
-
-.conversation-card:hover {
-  transform: translateX(4px);
-  border-left: 3px solid var(--color-accent);
-  box-shadow: var(--shadow-sm);
-}
-
-.conversation-info {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  flex: 1;
-  min-width: 0;
-}
-
-.conv-title-wrapper {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-}
-
-.conv-title-wrapper:hover .edit-icon {
-  opacity: 1;
-}
-
-.edit-icon {
-  font-size: 14px;
-  color: var(--color-text-muted);
-  opacity: 0;
-  transition: opacity 0.2s;
-}
-
-.conv-title-edit {
-  display: flex;
-  align-items: center;
-}
-
-.title-input {
-  font-family: var(--font-display);
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--color-ink);
-  padding: 4px 8px;
-  border: 1px solid var(--color-accent);
-  border-radius: 4px;
-  background: var(--color-bg);
-  outline: none;
-  width: 200px;
-}
-
-.conv-avatar {
-  width: 48px;
-  height: 48px;
-  background: linear-gradient(135deg, var(--color-accent-light) 0%, var(--color-accent) 100%);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-display);
-  font-size: 20px;
-  font-weight: 600;
-  color: white;
-  flex-shrink: 0;
-}
-
-.conv-details {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.conv-title {
-  font-family: var(--font-display);
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--color-ink);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.conv-meta {
-  display: flex;
-  gap: 12px;
-  font-size: 13px;
-  color: var(--color-text-muted);
-}
-
-.conv-character::after {
-  content: '·';
-  margin-left: 12px;
-}
-
-.conv-msg-count {
-  font-size: 12px;
-  color: var(--color-text-muted);
-}
-
-.conversation-actions {
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
-  margin-left: 16px;
-}
-
-.conversation-actions button {
-  font-family: var(--font-body);
-  font-size: 13px;
-  font-weight: 600;
-  padding: 8px 16px;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.btn-continue {
-  background: var(--color-ink);
-  color: white;
-  border: none;
-}
-
-.btn-continue:hover {
-  background: var(--color-accent);
-}
-
-.btn-delete {
-  background: transparent;
-  color: #C75050;
-  border: 1px solid #E5C5C5;
-}
-
-.btn-delete:hover {
-  background: #FEF2F2;
-  border-color: #C75050;
-}
-
 .pagination {
   display: flex;
   justify-content: center;
@@ -681,17 +457,6 @@ onMounted(async () => {
   to { transform: rotate(360deg); }
 }
 
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
 @media (max-width: 768px) {
   .page-header {
     padding: 24px;
@@ -703,21 +468,6 @@ onMounted(async () => {
 
   .search-bar {
     flex-direction: column;
-  }
-
-  .conversation-card {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 16px;
-  }
-
-  .conversation-actions {
-    width: 100%;
-    margin-left: 0;
-  }
-
-  .conversation-actions button {
-    flex: 1;
   }
 
   .stats-bar {
