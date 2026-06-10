@@ -130,6 +130,22 @@ class TestMessageSchemas:
     def test_message_create_empty_content_fails(self):
         with pytest.raises(ValidationError):
             MessageCreate(role="user", content="")
+    
+    def test_message_tool_role(self):
+        data = MessageCreate(role="tool", content="function result")
+        assert data.role == "tool"
+    
+    def test_message_function_role(self):
+        data = MessageCreate(role="function", content="call result")
+        assert data.role == "function"
+    
+    def test_message_system_role(self):
+        data = MessageCreate(role="system", content="You are a tutor")
+        assert data.role == "system"
+    
+    def test_message_assistant_role(self):
+        data = MessageCreate(role="assistant", content="Let me explain")
+        assert data.role == "assistant"
 
 
 class TestModelConfigSchemas:

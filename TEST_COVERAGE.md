@@ -1,21 +1,30 @@
 # Test Coverage Analysis
 
-> Generated: 2026-06-09 after full codebase review + fixes
+> Updated: 2026-06-10 after adding new tests
 
 ## Quick Status
 
 ```
-tests/unit/test_schemas.py             21 ✓   (最佳)
+tests/unit/test_schemas.py             25 ✓   (best coverage)
+tests/unit/test_knowledge_graph.py      13 ✓   (NEW - two-pass prereq resolution)
 tests/unit/test_rag_service.py         14 ✓
-tests/unit/test_repositories.py        11 ✓
+tests/e2e/test_api_e2e.py             27 ✓
+tests/unit/test_repositories.py        14 ✓   (expanded: update + not-found)
 tests/unit/test_assessment_engine.py    9 ✓
 tests/unit/test_narrative_assessment.py 5 ✓
-tests/e2e/test_api_e2e.py             24 ✓  3 ✗
 ────────────────────────────────────────────
-Total: 94 passed · 4 errors · 0 failed
+Backend: 107 passed · 0 errors · 0 failed
+Frontend: vitest configured, 8 tests written (need npm install to run)
 ```
 
-4 errors: 3 need `pip install pytest-mock`, 1 is a fire-and-forget task race at teardown.
+## Recent Changes
+
+- Fixed 3 E2E errors by installing `pytest-mock`
+- Fixed E2E teardown race by suppressing fire-and-forget `asyncio.create_task`
+- Added 13 KnowledgeGraph unit tests (two-pass prereq resolution)
+- Added 4 message schema tests (tool/function roles)
+- Added 2 MaterialRepository tests (update, not-found)
+- Added vitest config + 8 frontend tests (3 components, 1 composable, 1 store)
 
 ## Frontend Coverage: 0%
 

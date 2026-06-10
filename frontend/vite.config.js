@@ -38,5 +38,10 @@ export default defineConfig({
     outDir: 'dist',
     assetsDir: 'assets',
     sourcemap: false
+  },
+  test: {
+    environment: 'happy-dom',
+    globals: true,
+    include: ['src/**/*.{test,spec}.{js,ts}'],
   }
 })

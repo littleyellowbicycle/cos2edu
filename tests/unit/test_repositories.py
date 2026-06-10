@@ -82,6 +82,18 @@ class TestMaterialRepository:
         mat = await repo.get_by_id(test_material.id)
         assert mat is not None
         assert mat.title == test_material.title
+    
+    async def test_update(self, test_session: AsyncSession, test_material: Material):
+        repo = MaterialRepository(test_session)
+        updated = await repo.update(test_material, {"title": "更新后的标题"})
+        await test_session.commit()
+        await test_session.refresh(test_material)
+        assert test_material.title == "更新后的标题"
+    
+    async def test_get_by_id_not_found(self, test_session: AsyncSession):
+        repo = MaterialRepository(test_session)
+        mat = await repo.get_by_id(99999)
+        assert mat is None
 
 
 @pytest.mark.asyncio

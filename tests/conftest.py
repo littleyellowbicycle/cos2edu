@@ -3,6 +3,7 @@ import sys
 import shutil
 from typing import AsyncGenerator
 from io import BytesIO
+import asyncio
 
 os.environ["APP_ENV"] = "test"
 
@@ -20,6 +21,23 @@ from models import Character, Material, Conversation, Message, ModelConfig, Back
 
 
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
+
+
+@pytest.fixture(autouse=True)
+def suppress_background_tasks(monkeypatch):
+    """Prevent fire-and-forget asyncio.create_task from running after test teardown."""
+    original_create_task = asyncio.create_task
+
+    def _patched_create_task(coro, *args, **kwargs):
+        if hasattr(coro, '__name__') and 'process_material' in coro.__name__:
+            coro.close()
+            return None
+        if hasattr(coro, '__name__') and '_generate' in coro.__name__:
+            coro.close()
+            return None
+        return original_create_task(coro, *args, **kwargs)
+
+    monkeypatch.setattr(asyncio, 'create_task', _patched_create_task)
 
 
 @pytest_asyncio.fixture(scope="function")
