@@ -97,7 +97,7 @@ async def websocket_endpoint(
                 try:
                     from app.services import ModelConfigService
                     model_config = None
-                    if model_config_id:
+                    if model_config_id is not None:
                         model_config = await ModelConfigService.get_by_id(model_config_id)
                     else:
                         model_config = await ModelConfigService.get_default()

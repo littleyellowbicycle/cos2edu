@@ -11,11 +11,11 @@ class ConcurrencyLock:
             self.locks[key] = asyncio.Lock()
         
         lock = self.locks[key]
-        if lock.locked():
+        try:
+            acquired = await asyncio.wait_for(lock.acquire(), timeout=0)
+            return True
+        except asyncio.TimeoutError:
             return False
-        
-        await lock.acquire()
-        return True
     
     async def release(self, key: str):
         if key in self.locks:

@@ -29,6 +29,9 @@ class NarrativeWebSocket {
   }
 
   _doConnect(url) {
+    if (this.ws) {
+      this.ws.close()
+    }
     this.connectionState.value = 'connecting'
     this.ws = new WebSocket(url)
 

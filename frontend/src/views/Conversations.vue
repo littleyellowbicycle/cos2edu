@@ -92,7 +92,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useConversationStore } from '@/stores/conversation'
 import { ElMessage } from 'element-plus'
 import api from '@/api'
@@ -206,6 +206,10 @@ onMounted(async () => {
   }
   await doSearch()
   await loadStats()
+})
+
+onUnmounted(() => {
+  clearTimeout(debounceTimer)
 })
 </script>
 

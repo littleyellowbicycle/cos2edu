@@ -52,9 +52,12 @@ class TestCharacterRepository:
     
     async def test_delete(self, test_session: AsyncSession, test_character: Character):
         repo = CharacterRepository(test_session)
+        char_id = test_character.id
         result = await repo.delete(test_character)
         await test_session.commit()
         assert result is True
+        deleted = await repo.get_by_id(char_id)
+        assert deleted is None
 
 
 @pytest.mark.asyncio
@@ -133,6 +136,9 @@ class TestConversationRepository:
         )
         await test_session.commit()
         assert result is True
+        await test_session.refresh(test_conversation)
+        assert test_conversation.summary == "这是一个摘要"
+        assert test_conversation.summary_covered_message_count == 10
 
 
 @pytest.mark.asyncio

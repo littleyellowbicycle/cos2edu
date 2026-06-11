@@ -93,4 +93,6 @@ class TestNarrativeAssessment:
         result = self.engine.submit_assessment_answer("test_point", [0])
         assert isinstance(result, QuizResult)
         assert result.knowledge_point_id == "test_point"
+        assert result.total_questions >= 1
+        assert result.correct_count >= 0
         assert "test_point" not in self.engine._active_quizzes

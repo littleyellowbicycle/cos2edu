@@ -237,7 +237,9 @@ async def import_character_card_endpoint(
 
 @router.get("/avatars/{filename}")
 async def get_avatar(filename: str):
-    avatar_path = os.path.join(settings.AVATARS_DIR, filename)
+    avatar_path = os.path.realpath(os.path.join(settings.AVATARS_DIR, filename))
+    if not avatar_path.startswith(os.path.realpath(settings.AVATARS_DIR)):
+        raise HTTPException(status_code=403, detail="Forbidden")
     if not os.path.exists(avatar_path):
         raise HTTPException(status_code=404, detail="头像不存在")
     return FileResponse(avatar_path)

@@ -140,8 +140,9 @@ function actionButtonType(action) {
 
 function startAssessment() {
   const pointId = narrative.progress.currentPoint
+  const characterId = narrative.progress.characterId
   if (pointId) {
-    ws.startAssessment(pointId)
+    ws.generateAssessment(pointId, characterId)
     router.push('/exam')
   }
 }

@@ -7,6 +7,9 @@ from typing import Optional, List
 from fastapi import APIRouter, HTTPException, Request, UploadFile, File
 from pydantic import BaseModel
 
+from sqlalchemy import select, func
+from sqlalchemy.orm import selectinload
+
 from app.core.limiter import limiter
 from app.core.logging_config import get_logger
 
@@ -164,7 +167,6 @@ async def get_conversation_stats(request: Request):
     from app.repositories.unit_of_work import UnitOfWork
     from models.conversation import Conversation
     from models.message import Message
-    from sqlalchemy import select, func
 
     async with UnitOfWork() as uow:
         total_conversations = await uow.session.execute(
@@ -181,25 +183,23 @@ async def get_conversation_stats(request: Request):
         )
         recent_conversations = await uow.session.execute(
             select(Conversation)
+            .options(selectinload(Conversation.character))
             .order_by(Conversation.updated_at.desc())
             .limit(5)
         )
+        recent_rows = recent_conversations.scalars().all()
 
-    from app.services import CharacterService
-    recent = []
-    for conv in recent_conversations.scalars().all():
-        char_name = None
-        if conv.character_id:
-            char = await CharacterService.get_by_id(conv.character_id)
-            if char:
-                char_name = char.name
-        recent.append({
-            "id": conv.id,
-            "title": conv.title,
-            "character_id": conv.character_id,
-            "character_name": char_name,
-            "updated_at": conv.updated_at,
-        })
+        from app.services import CharacterService
+        recent = []
+        for conv in recent_rows:
+            char_name = conv.character.name if conv.character else None
+            recent.append({
+                "id": conv.id,
+                "title": conv.title,
+                "character_id": conv.character_id,
+                "character_name": char_name,
+                "updated_at": conv.updated_at,
+            })
 
     return {
         "total_conversations": total_conversations.scalar() or 0,
@@ -279,7 +279,7 @@ async def read_yaml_file(request: Request, file_path: str):
     if not os.path.exists(full_path):
         raise HTTPException(status_code=404, detail="文件不存在")
 
-    if not os.path.abspath(full_path).startswith(os.path.abspath(content_dir)):
+    if not os.path.realpath(full_path).startswith(os.path.realpath(content_dir)):
         raise HTTPException(status_code=403, detail="无权访问此路径")
 
     try:
@@ -302,7 +302,7 @@ async def write_yaml_file(request: Request, file_path: str, body: YAMLContentReq
     content_dir = _get_content_dir()
     full_path = os.path.join(content_dir, file_path)
 
-    if not os.path.abspath(full_path).startswith(os.path.abspath(content_dir)):
+    if not os.path.realpath(full_path).startswith(os.path.realpath(content_dir)):
         raise HTTPException(status_code=403, detail="无权访问此路径")
 
     try:

@@ -16,8 +16,9 @@ class MessageSearchRepository:
         skip: int = 0,
         limit: int = 50,
     ) -> tuple[List[Message], int]:
+        escaped = query.replace('%', '\\%').replace('_', '\\_')
         count_stmt = select(func.count(Message.id)).where(
-            Message.content.ilike(f"%{query}%")
+            Message.content.ilike(f"%{escaped}%", escape='\\')
         )
         if conversation_id:
             count_stmt = count_stmt.where(Message.conversation_id == conversation_id)
@@ -28,7 +29,7 @@ class MessageSearchRepository:
 
         stmt = (
             select(Message)
-            .where(Message.content.ilike(f"%{query}%"))
+            .where(Message.content.ilike(f"%{escaped}%", escape='\\'))
             .order_by(Message.created_at.desc())
             .offset(skip)
             .limit(limit)

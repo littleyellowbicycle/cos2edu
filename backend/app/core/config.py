@@ -111,8 +111,6 @@ class BaseConfig(BaseSettings):
         if isinstance(v, str):
             return [origin.strip() for origin in v.split(",")]
         return v
-    
-    model_config = ConfigDict(case_sensitive=True, extra="ignore")
 
 
 class DevConfig(BaseConfig):

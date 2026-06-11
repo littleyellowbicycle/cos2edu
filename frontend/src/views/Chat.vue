@@ -61,7 +61,7 @@ function handleCopy({ index, content }) {
   navigator.clipboard.writeText(content).then(() => {
     copiedMsgIdx.value = index
     setTimeout(() => { copiedMsgIdx.value = -1 }, 1500)
-  })
+  }).catch(() => {})
 }
 
 const route = useRoute()
@@ -233,13 +233,14 @@ onMounted(async () => {
   }))
 
   narrativeStore.setConnectionState(ws.connectionState.value)
-  watch(() => ws.connectionState.value, (state) => {
+  const stopWatch = watch(() => ws.connectionState.value, (state) => {
     narrativeStore.setConnectionState(state)
   })
+  wsUnsubFns.push(stopWatch)
 })
 
 onUnmounted(() => {
-  wsUnsubFns.forEach(fn => fn())
+  wsUnsubFns.forEach(fn => typeof fn === 'function' && fn())
   wsUnsubFns = []
   ws.disconnect()
 })

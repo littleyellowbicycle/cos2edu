@@ -95,7 +95,7 @@ async def acquire_concurrency_lock(client_id: str, conversation_id: int, lock_ty
 
 
 async def get_model_config(model_config_id: Optional[int]):
-    if model_config_id:
+    if model_config_id is not None:
         return await ModelConfigService.get_by_id(model_config_id)
     return await ModelConfigService.get_default()
 

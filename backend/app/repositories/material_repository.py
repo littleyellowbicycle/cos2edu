@@ -10,9 +10,10 @@ class MaterialRepository(BaseRepository[Material]):
         super().__init__(session, Material)
 
     async def search_by_title(self, title: str, skip: int = 0, limit: int = 100) -> List[Material]:
+        escaped = title.replace('%', '\\%').replace('_', '\\_')
         result = await self.session.execute(
             select(Material)
-            .filter(Material.title.ilike(f"%{title}%"))
+            .filter(Material.title.ilike(f"%{escaped}%", escape='\\'))
             .offset(skip)
             .limit(limit)
         )

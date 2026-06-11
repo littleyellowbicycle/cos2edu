@@ -31,18 +31,19 @@ class ConversationRepository(BaseRepository[Conversation]):
         count_stmt = select(func.count(Conversation.id))
 
         if keyword:
+            escaped = keyword.replace('%', '\\%').replace('_', '\\_')
             subq = select(Message.conversation_id).where(
-                Message.content.ilike(f"%{keyword}%")
+                Message.content.ilike(f"%{escaped}%", escape='\\')
             ).subquery()
             stmt = stmt.where(
                 or_(
-                    Conversation.title.ilike(f"%{keyword}%"),
+                    Conversation.title.ilike(f"%{escaped}%", escape='\\'),
                     Conversation.id.in_(select(subq.c.conversation_id)),
                 )
             )
             count_stmt = count_stmt.where(
                 or_(
-                    Conversation.title.ilike(f"%{keyword}%"),
+                    Conversation.title.ilike(f"%{escaped}%", escape='\\'),
                     Conversation.id.in_(select(subq.c.conversation_id)),
                 )
             )

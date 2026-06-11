@@ -33,6 +33,15 @@ export const useConversationStore = defineStore('conversation', {
     async delete(id) {
       await api.conversations.delete(id)
       this.conversations = this.conversations.filter(c => c.id !== id)
+    },
+    async update(id, data) {
+      const result = await api.conversations.update(id, data)
+      const index = this.conversations.findIndex(c => c.id === id)
+      if (index !== -1) this.conversations[index] = result
+      if (this.currentConversation?.id === id) {
+        this.currentConversation = result
+      }
+      return result
     }
   }
 })

@@ -196,7 +196,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useCharacterStore } from '@/stores/character'
 import { useNarrativeStore } from '@/stores/narrative'
@@ -229,6 +229,10 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+})
+
+onUnmounted(() => {
+  ws.disconnect()
 })
 
 function getCharacterMood(char) {

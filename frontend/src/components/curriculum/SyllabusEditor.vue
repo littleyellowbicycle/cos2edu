@@ -194,29 +194,35 @@ function onPointDragEnd() {
   dragState.sourceIndex = null
 }
 
+function escapeYamlStr(str) {
+  if (str == null) return '""'
+  const s = String(str)
+  return JSON.stringify(s)
+}
+
 async function saveEditorChanges() {
   editorSaving.value = true
   try {
     for (const mod of editorModules.value) {
       const pointsYaml = (mod.knowledge_points || []).map((pt, idx) => {
         const lines = [
-          `  - id: "${pt.id}"`,
-          `    name: "${pt.name}"`,
+          `  - id: ${escapeYamlStr(pt.id)}`,
+          `    name: ${escapeYamlStr(pt.name)}`,
           `    difficulty: ${pt.difficulty || 1}`,
           `    sort_order: ${idx}`,
         ]
         if (pt.key_concepts && pt.key_concepts.length > 0) {
           lines.push(`    key_concepts:`)
-          pt.key_concepts.forEach(c => lines.push(`      - "${c}"`))
+          pt.key_concepts.forEach(c => lines.push(`      - ${escapeYamlStr(c)}`))
         }
         if (pt.prerequisites && pt.prerequisites.length > 0) {
           lines.push(`    prerequisites:`)
-          pt.prerequisites.forEach(p => lines.push(`      - "${p}"`))
+          pt.prerequisites.forEach(p => lines.push(`      - ${escapeYamlStr(p)}`))
         }
         return lines.join('\n')
       }).join('\n')
 
-      const yamlContent = `id: "${mod.id}"\nname: "${mod.name}"\nknowledge_points:\n${pointsYaml}\n`
+      const yamlContent = `id: ${escapeYamlStr(mod.id)}\nname: ${escapeYamlStr(mod.name)}\nknowledge_points:\n${pointsYaml}\n`
       const yamlPath = `modules/${mod.id}.yaml`
       await api.content.writeYamlFile(yamlPath, yamlContent)
     }

@@ -111,7 +111,7 @@ customRenderer.code = function (data) {
     .replace(/"/g, '&quot;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-  return `<div class="ai-code-block"><div class="ai-code-header"><span class="ai-code-lang">${lang || 'code'}</span><button type="button" class="ai-code-copy" data-code="${safeCode}">复制</button></div><pre class="ai-code-content"><code>${code}</code></pre></div>`
+  return `<div class="ai-code-block"><div class="ai-code-header"><span class="ai-code-lang">${lang || 'code'}</span><button type="button" class="ai-code-copy" data-code="${safeCode}">复制</button></div><pre class="ai-code-content"><code>${safeCode}</code></pre></div>`
 }
 
 marked.setOptions({

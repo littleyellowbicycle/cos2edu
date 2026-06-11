@@ -127,7 +127,7 @@ const masteryColor = computed(() => {
 
 function requestQuiz() {
   loading.value = true
-  ws.startAssessment(narrative.progress.currentPoint)
+  ws.generateAssessment(narrative.progress.currentPoint, narrative.progress.characterId)
 }
 
 function nextQuestion() {
@@ -137,9 +137,11 @@ function nextQuestion() {
 
   if (isLastQuestion.value) {
     loading.value = true
-    ws.submitAssessmentAnswer(
+    ws.submitAssessment(
       quiz.value.knowledge_point_id,
+      narrative.progress.characterId,
       answers.value,
+      narrative.progress.conversationId,
     )
   } else {
     currentIndex.value++
@@ -174,7 +176,7 @@ function onQuizMessage(msg) {
   answers.value = []
   currentIndex.value = 0
   selectedAnswer.value = null
-  narrative.setQuiz(msg.payload)
+  narrative.setAssessment(msg.payload)
 }
 
 function onResultMessage(msg) {
@@ -189,6 +191,7 @@ function onErrorMessage(msg) {
 }
 
 onMounted(() => {
+  ws.connect()
   ws.on('assessment.quiz', onQuizMessage)
   ws.on('assessment.result', onResultMessage)
   ws.on('error', onErrorMessage)
@@ -198,6 +201,7 @@ onUnmounted(() => {
   ws.off('assessment.quiz', onQuizMessage)
   ws.off('assessment.result', onResultMessage)
   ws.off('error', onErrorMessage)
+  ws.disconnect()
 })
 </script>
 

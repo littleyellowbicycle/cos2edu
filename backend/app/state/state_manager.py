@@ -2,6 +2,8 @@ import asyncio
 from datetime import datetime
 from typing import Optional
 
+from sqlalchemy import select
+
 from app.core.logging_config import get_logger
 from app.repositories.unit_of_work import UnitOfWork
 
@@ -129,7 +131,7 @@ class StateManager:
         from models.character_state import CharacterState
         char_id = data.get("character_id")
         result = await uow.session.execute(
-            __import__("sqlalchemy").select(CharacterState).where(
+            select(CharacterState).where(
                 CharacterState.character_id == char_id
             )
         )
@@ -141,7 +143,7 @@ class StateManager:
         from models.character_state import CharacterState
         char_id = data.get("character_id")
         result = await uow.session.execute(
-            __import__("sqlalchemy").select(CharacterState).where(
+            select(CharacterState).where(
                 CharacterState.character_id == char_id
             )
         )

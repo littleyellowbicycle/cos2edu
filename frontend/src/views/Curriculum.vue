@@ -166,7 +166,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useNarrativeStore } from '@/stores/narrative'
 import { useWebSocket } from '@/composables/useWebSocket'
 import api, { apiClient } from '@/api'
@@ -479,6 +479,10 @@ onMounted(async () => {
   await loadCurriculum()
   ws.connect()
   ws.requestStateSync()
+})
+
+onUnmounted(() => {
+  ws.disconnect()
 })
 </script>
 

@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.join(project_root, 'backend'))
 
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.pool import StaticPool
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from httpx import AsyncClient, ASGITransport
 
@@ -48,7 +48,14 @@ async def create_test_app_with_engine(engine):
     from app.api.v1.chat import router as chat_router
     from app.api.v1.upload import router as upload_router
 
+    from app.core.limiter import limiter
+
+    limiter.reset()
+    limiter.enabled = False
+
     test_app = FastAPI(title="Test App")
+
+    test_app.state.limiter = limiter
 
     test_app.add_middleware(
         CORSMiddleware,
@@ -61,6 +68,12 @@ async def create_test_app_with_engine(engine):
     test_app.include_router(crud_router, prefix="/api/v1/crud", tags=["crud"])
     test_app.include_router(chat_router, prefix="/api/v1/chat", tags=["chat"])
     test_app.include_router(upload_router, prefix="/api/v1/upload", tags=["upload"])
+
+    @test_app.middleware("http")
+    async def bypass_rate_limit(request: Request, call_next):
+        request.state.limiter = None
+        response = await call_next(request)
+        return response
 
     return test_app, session_factory
 

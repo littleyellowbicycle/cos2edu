@@ -1,8 +1,6 @@
 import os
 import sys
-import shutil
 from typing import AsyncGenerator
-from io import BytesIO
 import asyncio
 
 os.environ["APP_ENV"] = "test"
@@ -31,10 +29,12 @@ def suppress_background_tasks(monkeypatch):
     def _patched_create_task(coro, *args, **kwargs):
         if hasattr(coro, '__name__') and 'process_material' in coro.__name__:
             coro.close()
-            return None
+            dummy = asyncio.sleep(0)
+            return original_create_task(dummy, *args, **kwargs)
         if hasattr(coro, '__name__') and '_generate' in coro.__name__:
             coro.close()
-            return None
+            dummy = asyncio.sleep(0)
+            return original_create_task(dummy, *args, **kwargs)
         return original_create_task(coro, *args, **kwargs)
 
     monkeypatch.setattr(asyncio, 'create_task', _patched_create_task)

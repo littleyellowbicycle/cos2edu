@@ -39,7 +39,7 @@
           >
             <div class="template-name">{{ tpl.name }}</div>
             <div class="template-style">风格：{{ tpl.teaching_style }}</div>
-            <div class="template-personality">{{ tpl.personality.slice(0, 60) }}...</div>
+            <div class="template-personality">{{ (tpl.personality || '').slice(0, 60) }}...</div>
           </div>
         </div>
       </div>

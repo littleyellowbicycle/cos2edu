@@ -120,6 +120,7 @@ onUnmounted(() => {
   unsubRender?.()
   unsubDestroy?.()
   unsubUpdate?.()
+  componentCache.clear()
 })
 </script>
 
