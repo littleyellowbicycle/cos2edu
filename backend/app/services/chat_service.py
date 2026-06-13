@@ -87,16 +87,18 @@ class LLMProvider:
             raise ValueError("请先选择 AI 模型。访问 /settings 页面进行设置。")
 
     def _get_client(self):
-        extra_headers = {}
-        
         if self.provider == "openai":
             return AsyncOpenAI(api_key=self.api_key, base_url=self.base_url or "https://api.openai.com/v1")
         elif self.provider == "anthropic":
             return AsyncAnthropic(api_key=self.api_key, base_url=self.base_url or "https://api.anthropic.com")
         elif self.provider == "minimax":
+            headers = {}
+            if self.group_id:
+                headers["x-group-id"] = self.group_id
             return AsyncOpenAI(
-                api_key=self.api_key, 
-                base_url=self.base_url or "https://api.minimax.chat/v1"
+                api_key=self.api_key,
+                base_url=self.base_url or "https://api.minimax.chat/v1",
+                default_headers=headers or None
             )
         else:
             return AsyncOpenAI(api_key=self.api_key, base_url=self.base_url)

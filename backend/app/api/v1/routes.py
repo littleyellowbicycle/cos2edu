@@ -38,6 +38,7 @@ class TestConfigRequest(BaseModel):
     api_key: str = ""
     base_url: Optional[str] = None
     config_id: Optional[int] = None
+    group_id: Optional[str] = None
 
 
 class ModelOption(BaseModel):
@@ -836,7 +837,8 @@ async def test_ai_connection(request: Request, config: TestConfigRequest):
             "provider": config.provider,
             "model_name": config.model,
             "api_key": api_key,
-            "base_url": config.base_url
+            "base_url": config.base_url,
+            "group_id": config.group_id
         })
 
         test_messages = [{"role": "user", "content": "Hi"}]

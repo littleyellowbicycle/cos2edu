@@ -162,4 +162,8 @@ onUnmounted(() => {
   overflow-y: auto;
   padding: 20px;
 }
+
+.slot-panel:empty {
+  display: none;
+}
 </style>

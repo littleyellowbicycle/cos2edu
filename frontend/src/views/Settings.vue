@@ -506,7 +506,8 @@ async function testConnection() {
     provider: form.value.provider,
     model: form.value.model_name,
     api_key: keyToTest,
-    base_url: form.value.base_url
+    base_url: form.value.base_url,
+    group_id: form.value.group_id
   }
   if (!keyToTest && currentConfig.value.id) {
     body.config_id = currentConfig.value.id
