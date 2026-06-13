@@ -2,17 +2,12 @@
   <header class="hero">
     <div class="hero-content">
       <div class="hero-ornament" aria-hidden="true">❧</div>
-      <h1 class="hero-title">苏格拉底</h1>
-      <p class="hero-subtitle">AI 教学系统</p>
-      <p class="hero-description">
-        通过苏格拉底式提问法，探索知识的本质。<br>
-        与 AI 角色对话，在思考中领悟真理。
-      </p>
+      <h1 class="hero-title">试问：何为生命的第一因？</h1>
       <div class="hero-actions">
         <router-link to="/characters" class="btn btn-primary">开始探索</router-link>
-        <router-link to="/dashboard" class="btn btn-secondary">学习中心</router-link>
       </div>
     </div>
+    <p class="hero-footnote">通过苏格拉底式提问法，探索知识的本质。与 AI 角色对话，在思考中领悟真理。</p>
     <div class="hero-decoration" aria-hidden="true">
       <div class="circle circle-1"></div>
       <div class="circle circle-2"></div>
@@ -28,7 +23,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 60px 40px;
+  padding: 60px 40px 80px;
   overflow: hidden;
   background: linear-gradient(180deg, var(--color-bg-warm) 0%, var(--color-bg) 100%);
 }
@@ -42,37 +37,22 @@
 }
 
 .hero-ornament {
-  font-size: 48px;
+  font-size: 100px;
   color: var(--color-accent);
-  margin-bottom: 24px;
-  opacity: 0.8;
+  margin-bottom: 20px;
+  opacity: 0.7;
+  display: block;
 }
 
 .hero-title {
   font-family: var(--font-display);
-  font-size: clamp(56px, 10vw, 96px);
+  font-size: clamp(40px, 7vw, 60px);
   font-weight: 600;
   color: var(--color-ink);
-  letter-spacing: -0.02em;
-  line-height: 1;
-  margin-bottom: 8px;
-}
-
-.hero-subtitle {
-  font-family: var(--font-display);
-  font-size: clamp(24px, 4vw, 36px);
-  font-weight: 400;
-  font-style: italic;
-  color: var(--color-accent);
-  margin-bottom: 32px;
-  letter-spacing: 0.05em;
-}
-
-.hero-description {
-  font-size: 18px;
-  line-height: 1.8;
-  color: var(--color-text-muted);
+  letter-spacing: -0.01em;
+  line-height: 1.15;
   margin-bottom: 48px;
+  white-space: nowrap;
 }
 
 .hero-actions {
@@ -84,10 +64,10 @@
 
 .btn {
   font-family: var(--font-body);
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 600;
   text-decoration: none;
-  padding: 16px 36px;
+  padding: 18px 44px;
   border-radius: 4px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   letter-spacing: 0.03em;
@@ -106,15 +86,18 @@
   box-shadow: var(--shadow-md);
 }
 
-.btn-secondary {
-  background: transparent;
-  color: var(--color-ink);
-  border: 2px solid var(--color-border);
-}
-
-.btn-secondary:hover {
-  border-color: var(--color-ink);
-  transform: translateY(-2px);
+.hero-footnote {
+  position: absolute;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  opacity: 0.5;
+  letter-spacing: 0.05em;
+  text-align: center;
+  white-space: nowrap;
 }
 
 .hero-decoration {
@@ -180,7 +163,7 @@
 
 @media (max-width: 768px) {
   .hero {
-    padding: 40px 24px;
+    padding: 40px 24px 80px;
   }
 
   .hero-actions {
@@ -191,6 +174,12 @@
   .btn {
     width: 100%;
     max-width: 280px;
+  }
+
+  .hero-footnote {
+    white-space: normal;
+    padding: 0 24px;
+    bottom: 20px;
   }
 }
 </style>

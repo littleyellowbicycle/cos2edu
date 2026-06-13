@@ -1,74 +1,78 @@
 <div align="center">
 
-# Cos2Edu  ❧
+# Cos²Edu  ❧
 
-**叙事驱动的苏格拉底式 AI 教学系统**
+**以问为教**
 
-不是灌输知识，而是通过追问唤醒思考力
+> 试问：何为生命的第一因？
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
 [![Vue](https://img.shields.io/badge/Vue_3-4FC08D?style=flat-square&logo=vuedotjs&logoColor=white)](https://vuejs.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](./LICENSE)
 
-[快速开始](#-快速开始) · [核心特性](#-核心特性) · [架构](#-架构) · [文档](#-文档)
+[何以开始](#-何以开始) · [此为何物](#-此为何物) · [其构若何](#-其构若何) · [更问何处](#-更问何处)
 
 </div>
 
 ---
 
-## 理念
+## 何以言之
 
-> 教育不是灌满一桶水，而是点燃一把火。 ——叶芝
+> 汝来此，欲求答案乎？
+>
+> 然——予岂敢以答案奉君。予之所赠，唯问而已。
 
-传统 AI 教育工具直接给答案，学生记住结论却不知所以然。Cos2Edu 反其道而行——**AI 导师不会告诉你答案，而是通过连续追问引导你自己推理出结论**。
+世间 AI 教育之器，莫不急于呈其结论。君问之，彼答之；君惑焉，彼释焉。看似便捷，实则夺君思之权也。
 
-这不是聊天机器人加上教育标签。这是一套叙事驱动的教学架构：世界观引擎推进剧情，情感引擎让角色"活"起来，知识图谱确保学习路径有序，上下文预算让每条 prompt 都有教学目的。
+Cos²Edu 不然。此间 AI 导师，不告君以何是，而问君以何故。不问则已，一问再问，直至君自抵其理。
 
----
-
-## ✨ 核心特性
-
-### 🧠 苏格拉底式教学引擎
-
-基于知识图谱 DAG 依赖检测、上下文预算分配、差异化教学提示，每一步引导都经过精心编排。AI 导师根据学生当前掌握程度选择下一个知识点，用提问而非陈述推进学习。
-
-### 🎭 动态角色系统
-
-角色不只是人格描述字符串。情感引擎实时追踪 mood/trust，基于学生反馈动态变化；每个角色拥有独立的敏感度曲线和表达风格。支持角色卡导入导出（兼容 SillyTavern V2 格式）。
-
-### 🌍 叙事驱动架构
-
-世界状态引擎管理场景与时间线，事件引擎在特定条件下触发随机/定时/条件事件。学习不再是一条直线，而是一场有起承转合的旅程——教室上课、辩论厅交锋、考核室检验、休息区闲聊。
-
-### 📚 双轨内容系统
-
-- **内置精品课程**：YAML 编写的结构化课程，预定义知识依赖、教学提示、评估标准
-- **用户上传教材**：PDF/DOCX/TXT → 自动解析 → LLM 生成大纲 → 人工确认 → 结构化教学
-
-### 🔌 WebSocket 实时通信
-
-对话流、情感更新、场景切换、事件触发——全部通过 WebSocket 实时推送，支持断连自动重连 + 状态全量同步。
-
-### 🔍 RAG 增强检索
-
-FAISS 向量索引 + 分块检索，将教材内容精准注入教学 prompt，而非简单的全文截断。
-
-### 🎯 多模型支持
-
-OpenAI · Anthropic · 阿里通义千问 · 智谱 AI · 豆包 · 文心一言 · 任何 OpenAI 兼容 API，一键切换。
-
-### 🗺️ 课程脑图
-
-Mermaid.js 渲染的知识点依赖关系图，直观展示学习路径和当前进度。
+此非一聊天机器人之附教育标签也。此中有叙事引擎为枢，情感引擎令角色生息，知识图谱锚其学径，上下文之预算使每问每答俱有师心。
 
 ---
 
-## 🏗 架构
+## 此为何物
+
+### ❧ 问学之引
+
+循知识图谱之 DAG 依赖，量上下文之预算，施差异之教。AI 导师察君所学深浅，择其宜者而进——以问为舟，不问则止。
+
+### ❧ 角色之化
+
+角色非一纸人格描述也。情感引擎实时追其 mood 与 trust，因君应而起伏；每角有独属之敏感曲线、表达之风。支持角色卡出入（相容 SillyTavern V2 格式）。
+
+### ❧ 叙事之纬
+
+世界状态引擎掌场景时轴，事件引擎于特定机缘发随机、定时、条件之事。学不复为一直线——课堂讲授、厅堂辩驳、室中考核、隅间闲谈，起承转合，自成篇章。
+
+### ❧ 双轨之库
+
+- **内置精课**：YAML 所撰之结构化课程，预布知识依赖、教学提示、评估之准
+- **自载教材**：PDF/DOCX/TXT → 机解其文 → LLM 出纲 → 君予裁夺 → 授之为课
+
+### ❧ WebSocket 实时之通
+
+对谈、情感、景迁、事起——皆由 WebSocket 实时推至。断则复连，状态全量同之。
+
+### ❧ RAG 助忆
+
+FAISS 向量之索引，分块而检，取教材之精义，注于教问之 prompt，非徒全文截断也。
+
+### ❧ 多模之选
+
+OpenAPI · Anthropic · 通义千问 · 智谱 · 豆包 · 文心 · 凡 OpenAI 兼容之 API，一键切换。
+
+### ❧ 课程之图
+
+Mermaid.js 所绘之知识依赖图，学径与进度一目了然。
+
+---
+
+## 其构若何
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                    Frontend (Vue 3)                      │
+│                     Frontend (Vue 3)                      │
 │  Chat · Curriculum · Characters · Conversations · Settings│
 │         Pinia Store │ WebSocket Composable │ API Client   │
 └──────────────────────────┬──────────────────────────────┘
@@ -103,180 +107,179 @@ Mermaid.js 渲染的知识点依赖关系图，直观展示学习路径和当前
 └──────────────────────────────────────────────────────────┘
 ```
 
-### 领域引擎
+### 七引擎
 
-| 引擎 | 职责 |
+| 引擎 | 其职 |
 |------|------|
-| **NarrativeEngine** | 总调度：编排所有引擎协同工作 |
-| **TeachingEngine** | 知识点选取 + Context Budget 构建 + 差异化教学提示 |
-| **EmotionEngine** | mood/trust 实时追踪（含衰减）、角色敏感度曲线、表达生成 |
-| **EventEngine** | 时间事件 / 条件事件 / 随机事件触发，优先级评估 |
-| **WorldStateEngine** | 场景管理 + 时间推进 + YAML 配置加载 |
-| **CharacterEngine** | 角色注册、配置加载、人格描述查询 |
-| **AssessmentEngine** | 学习评估、知识点掌握度判定 |
+| **NarrativeEngine** | 总调度：协诸引擎，共成其事 |
+| **TeachingEngine** | 择知识点、筑 Context Budget、施差异之教 |
+| **EmotionEngine** | mood/trust 实时追踪（含衰减），角色敏感度曲线，表出之词 |
+| **EventEngine** | 时间/条件/随机之事，优先评其轻重 |
+| **WorldStateEngine** | 场景管、时轴推、YAML 配载 |
+| **CharacterEngine** | 角色登册、配载查询、人格之述 |
+| **AssessmentEngine** | 学之评估、知识点掌握之判 |
 
 ---
 
-## 🚀 快速开始
+## 何以开始
 
-### 环境要求
+### 所须
 
 - Python 3.10+
 - Node.js 18+
 
-### 源码运行
+### 源码起之
 
 ```bash
-# 克隆项目
 git clone https://github.com/littleyellowbicycle/cos2edu.git
 cd cos2edu
 
-# 启动后端
+# 启后端
 cd backend
 pip install -r requirements.txt
 python main.py
 
-# 启动前端（新终端）
+# 启前端（另开一窗）
 cd frontend
 npm install
 npm run dev
 ```
 
-访问 **http://localhost:5173** 开始使用。
+启而后访 **http://localhost:5173**。
 
-### Docker 部署
+### Docker 布之
 
 ```bash
 docker-compose up -d
 ```
 
-### 配置模型
+### 配模型
 
-首次使用请前往 **设置** 页面添加 LLM API 密钥：
+初用，请至 **设置** 页添 LLM API 密钥：
 
-| 提供商 | 模型示例 | 配置方式 |
-|--------|----------|----------|
+| 供者 | 模型例 | 何为 |
+|------|--------|------|
 | OpenAI | gpt-4o, gpt-4o-mini | API Key |
 | Anthropic | claude-3-5-sonnet | API Key |
 | 阿里通义千问 | qwen-plus, qwen-max | DashScope Key |
 | 智谱 AI | glm-4, glm-3-turbo | API Key |
 | 豆包 | doubao-pro | API Key + Base URL |
 | 文心一言 | ernie-4.0 | API Key + Base URL |
-| OpenAI 兼容 | 任意模型 | 自定义 base_url + model |
+| OpenAI 兼容 | 任意 | 自定义 base_url + model |
 
 ---
 
-## 📖 使用流程
+## 问学之流
 
 ```
-配置模型 → 选择角色 → 上传教材(可选) → 开始苏格拉底式对话
-                                        ↓
-                              知识图谱自动规划路径
-                              情感引擎动态响应
-                              事件引擎触发叙事
-                              RAG 精准注入上下文
+配模型 → 择角色 → 载教材(不必) → 始苏格拉底之问
+                                     ↓
+                          知识图谱自规其径
+                          情感引擎应声而动
+                          事件引擎发叙事之机
+                          RAG 精准缀其上下文
 ```
 
-### 内置角色
+### 三师
 
-项目内置三个风格迥异的 AI 导师，每个角色拥有独立的教学风格和情感模型：
+| 角色 | 教风 | 其性 |
+|------|------|------|
+| **甘雨** | 叙事为引 | 温而善喻，以故事为筏，直觉为桥，俯瞰全局 |
+| **刻晴** | 逻辑推导 | 严而有序，从定义起步，步步为营，重数学之精 |
+| **三月七** | 实践驱动 | 活而好奇，以代码实验入题，鼓励手触真知 |
 
-| 角色 | 教学风格 | 特点 |
-|------|----------|------|
-| **甘雨** | 叙事引导 | 温柔耐心，用故事和比喻建立直觉，从宏观视角切入 |
-| **刻晴** | 逻辑推导 | 严谨高效，从定义出发逐步推导，强调数学精确性 |
-| **三月七** | 实践驱动 | 活泼好奇，用代码和实验引入概念，鼓励动手尝试 |
+### 四境
 
-### 世界观场景
-
-| 场景 | 氛围 | 允许的行为 |
-|------|------|-----------|
-| 教室 | 明亮，数据流天际线 | 教学、提问、讨论、练习 |
-| 辩论厅 | 圆形辩论场，全息投影 | 辩论、陈述、提问 |
-| 考核室 | 安静，倒计时跳动 | 考试、回顾 |
-| 休息区 | 舒适，壁画浮现知识点 | 提问、讨论、回顾 |
+| 场景 | 其氛 | 可行之事 |
+|------|------|---------|
+| 教室 | 明净，数据流天际 | 问、答、论、习 |
+| 辩论厅 | 圆庭，全息投影 | 辩、陈、问 |
+| 考核室 | 寂然，倒计时跃 | 考、省 |
+| 休息区 | 怡然，壁浮知识点 | 问、论、省 |
 
 ---
 
-## 📂 项目结构
+## 林中之木
 
 ```
 cos2edu/
 ├── backend/
 │   ├── app/
-│   │   ├── engines/          # 领域引擎（核心业务逻辑）
-│   │   ├── graph/            # 知识图谱（DAG 依赖）
+│   │   ├── engines/          # 七引擎（核心）
+│   │   ├── graph/            # 知识图谱（DAG）
 │   │   ├── llm/              # LLM 抽象层 + Context Budget
-│   │   ├── parsers/          # 文档解析器（PDF/DOCX/TXT）
-│   │   ├── rag/              # RAG 检索服务（FAISS）
-│   │   ├── repositories/     # 数据访问层（Repository 模式）
-│   │   ├── schemas/          # Pydantic 数据模型
-│   │   ├── services/         # 服务层（Chat/RAG/角色卡）
-│   │   ├── state/            # 状态管理（Critical/Soft 分级）
-│   │   ├── tasks/            # 异步任务（教材处理管线）
+│   │   ├── parsers/          # 文档解者（PDF/DOCX/TXT）
+│   │   ├── rag/              # RAG 检索（FAISS）
+│   │   ├── repositories/     # 数据取层（Repository 范式）
+│   │   ├── schemas/          # Pydantic 形
+│   │   ├── services/         # 服层（Chat/RAG/角色卡）
+│   │   ├── state/            # 状管（Critical/Soft 分级）
+│   │   ├── tasks/            # 异步任（教材处理）
 │   │   ├── api/v1/           # REST + WebSocket API
 │   │   └── content/          # YAML 内容（课程/角色/世界观）
-│   ├── models/               # SQLAlchemy ORM 模型
+│   ├── models/               # SQLAlchemy ORM 形
 │   └── main.py
 ├── frontend/
 │   └── src/
-│       ├── views/            # 页面组件
+│       ├── views/            # 页面
 │       ├── components/       # 通用组件
-│       ├── stores/           # Pinia 状态管理
-│       ├── composables/      # 组合式函数（WebSocket）
-│       ├── api/              # HTTP 客户端
-│       └── router/           # 路由配置
-├── docs/                     # 设计文档
+│       ├── stores/           # Pinia 状管
+│       ├── composables/      # 组合函数（WebSocket）
+│       ├── api/              # HTTP 客
+│       └── router/           # 径由
+├── docs/                     # 文
 └── docker-compose.yml
 ```
 
 ---
 
-## 📚 文档
+## 更问何处
 
-| 文档 | 说明 |
+| 文卷 | 所言 |
 |------|------|
-| [架构设计](./docs/redesign_plan.md) | 完整架构设计，含优化建议 |
-| [设计理念](./docs/design.md) | 核心设计理念与教学哲学 |
-| [架构分离文档](./ARCHITECTURE_SEPARATION.md) | 前后端架构详解 |
-| [SillyTavern 对比分析](./docs/SillyTavern对比分析与优化方案.md) | 角色系统/世界书/TTS/Live2D 对比与优化方案 |
-| [Generative UI 方案](./docs/Cos2Edu%20前端重构与生成式%20UI%20(Generative%20UI)%20方案说明书%20v2.md) | 前端重构与生成式 UI 架构 |
-| [RAGFlow 集成](./docs/RAGFlow集成方案.md) | RAG 知识库集成方案 |
-| [文件上传与 RAG](./docs/文件上传与RAG方案.md) | 文件处理技术方案 |
-| [RAG 部署方案](./docs/RAG部署方案分析.md) | RAG 部署方案对比分析 |
-| [Windows 打包](./docs/Windows打包方案.md) | Windows 桌面应用打包方案 |
+| [架构](./docs/redesign_plan.md) | 架构全貌与精进之议 |
+| [设计](./docs/design.md) | 核心之意与教学之哲 |
+| [架构分离](./ARCHITECTURE_SEPARATION.md) | 前后端架构详析 |
+| [SillyTavern 对勘](./docs/SillyTavern对比分析与优化方案.md) | 角色/世界书/TTS/Live2D 对勘 |
+| [Generative UI 方案](./docs/Cos2Edu%20前端重构与生成式%20UI%20(Generative%20UI)%20方案说明书%20v2.md) | 前端重构与生成式 UI |
+| [RAGFlow 之合](./docs/RAGFlow集成方案.md) | RAG 知库集成 |
+| [文件上传与 RAG](./docs/文件上传与RAG方案.md) | 文件处理之术 |
+| [RAG 部署方策](./docs/RAG部署方案分析.md) | 部署方案对勘 |
+| [Windows 打包](./docs/Windows打包方案.md) | 桌面应用打包之术 |
 
 ---
 
-## 🧭 路线图
+## 前程
 
-- [x] Phase 1.0 — 核心循环：TeachingEngine + WorldStateEngine + KnowledgeGraph + WebSocket
-- [x] Phase 1.5 — 情感与事件：EmotionEngine + EventEngine + Parsers + RAG + Material Pipeline
-- [x] Phase 1.8 — 角色卡导入导出 + 课程脑图 + 大纲分类管理
+- [x] Phase 1.0 — 核心之环：TeachingEngine + WorldStateEngine + KnowledgeGraph + WebSocket
+- [x] Phase 1.5 — 情感与事：EmotionEngine + EventEngine + Parsers + RAG + Material Pipeline
+- [x] Phase 1.8 — 角色卡出入 + 课程脑图 + 大纲分类管
 - [ ] Phase 2.0 — AssessmentEngine + 场景切换 UI + 课程编辑器
-- [ ] Phase 2.5 — TTS 语音合成（EdgeTTS）+ Live2D 角色渲染
-- [ ] Phase 3.0 — 多学生协作 + 学习分析仪表盘
-- [ ] Phase 4.0 — Plugin 系统 + 自定义世界观编辑器
+- [ ] Phase 2.5 — TTS 语合（EdgeTTS）+ Live2D 角色呈
+- [ ] Phase 3.0 — 多生协学 + 学习分析仪表盘
+- [ ] Phase 4.0 — 插件系统 + 自定义世界观编辑器
 
 ---
 
-## 🙏 致谢
+## 致谢
 
-本项目的设计和实现受到了以下文章的启发：
+此间之思，师于二文：
 
-- [《怎样用AI让自己沉迷学习？》](https://zhuanlan.zhihu.com/p/2012398047620014256) — 探索 AI 教育应用的灵感来源
-- [《AI沉迷学习指南》](https://zhuanlan.zhihu.com/p/2016557736364634882) — 苏格拉底式 AI 教学法的实践参考
+- [《怎样用AI让自己沉迷学习？》](https://zhuanlan.zhihu.com/p/2012398047620014256)
+- [《AI沉迷学习指南》](https://zhuanlan.zhihu.com/p/2016557736364634882)
 
-感谢 **@硅与之** 和 **@null** 两位作者的分享！
+谢 **@硅与之** 与 **@null** 二君之述。
 
 ---
 
-## 📜 License
+## 许
 
 [MIT License](./LICENSE)
 
 <div align="center">
 
-**如果这个项目对你有帮助，请给个 ⭐ Star！**
+**子若以此器为益，愿赐一星 ⭐ 否？**
+
+❧
 
 </div>

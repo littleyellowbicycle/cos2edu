@@ -36,7 +36,7 @@ const props = defineProps({
 defineEmits(['copy'])
 
 const avatarStyle = computed(() => {
-  if (props.characterAvatarType === 'image' && props.characterAvatar) {
+  if (props.message.role === 'assistant' && props.characterAvatarType === 'image' && props.characterAvatar) {
     const avatarUrl = props.characterAvatar.startsWith('/') || props.characterAvatar.startsWith('data:') || props.characterAvatar.startsWith('http')
       ? props.characterAvatar
       : `/api/v1/crud/avatars/${props.characterAvatar}`
@@ -46,6 +46,7 @@ const avatarStyle = computed(() => {
 })
 
 const avatarDisplay = computed(() => {
+  if (props.message.role === 'user') return '❧'
   if (props.characterAvatarType === 'emoji' && props.characterAvatar) {
     return props.characterAvatar
   }
@@ -55,7 +56,7 @@ const avatarDisplay = computed(() => {
   return props.characterName ? props.characterName.charAt(0) : '?'
 })
 
-const avatarLabel = computed(() => props.message.role === 'user' ? '我' : props.characterName)
+const avatarLabel = computed(() => props.message.role === 'user' ? '❧' : props.characterName)
 
 function countWords(text) {
   const clean = text.replace(/<[^>]*>/g, '').trim()
@@ -102,7 +103,7 @@ function formatTime(date) {
 }
 
 .message.user .message-avatar {
-  background: var(--color-ink);
+  background: var(--color-accent);
   color: white;
 }
 
