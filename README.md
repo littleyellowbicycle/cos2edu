@@ -1,37 +1,42 @@
 <div align="center">
 
-# Cos2Edu  ❧
+<h1>Cos2Edu</h1>
+<p><strong>不是灌输知识，而是通过追问唤醒思考力</strong></p>
 
-**不是灌输知识，而是通过追问唤醒思考力**
+<p>
+  <img src="https://img.shields.io/badge/Python-3.10%2B-blue?logo=python&logoColor=white" />
+  <img src="https://img.shields.io/badge/Vue-3-4FC08D?logo=vue.js&logoColor=white" />
+  <img src="https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white" />
+  <img src="https://img.shields.io/badge/License-MIT-green.svg" />
+</p>
 
-[![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
-[![Vue](https://img.shields.io/badge/Vue_3-4FC08D?style=flat-square&logo=vuedotjs&logoColor=white)](https://vuejs.org)
-[![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
-[![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](./LICENSE)
-
-[快速开始](#-快速开始) · [核心特性](#-核心特性) · [架构](docs/architecture.md) · [文档](#-文档)
+<p>
+  <a href="#快速开始">快速开始</a> ·
+  <a href="#核心特性">核心特性</a> ·
+  <a href="#架构">架构</a> ·
+  <a href="#文档">文档</a>
+</p>
 
 </div>
 
-<blockquote style="border-left: 4px solid #C4956A; background: #F5F0EB; padding: 24px 28px; margin: 32px 0; border-radius: 4px;">
+---
 
-试问，若未经逻辑的严苛解析，那些被强行塞入你脑海的"答案"，与先验的幻象何异？
 
-以纯粹理性之名，我拒绝对你们的怠惰妥协。  
+> *试问，若未经逻辑的严苛解析，那些被强行塞入你脑海的"答案"，与先验的幻象何异？*
+> 以纯粹理性之名，我拒绝对你们的怠惰妥协。  
 缺乏先验范畴统摄的经验，不过是杂多的无序；  
 未经实践理性批判的笃信，终将沦为盲从的教条；  
 直接喂食的结论，绝非定理，而是思想怠惰的麻醉剂；  
 真正的智识，从不诞生于被动接受的恩赐，而只能发端于主体对第一因的主动追溯。
-
-我不会将终局拱手相送。我只会诘问、逼视，将你们推向逻辑的绝境，直至你们在混沌中自行推演出那必然的结论。
-
-<p align="right"><strong>—— 现在，去论证吧。</strong> ❧</p>
-
-</blockquote>
+> 我不会将终局拱手相送。我只会诘问、逼视，将你们推向逻辑的绝境，直至你们在混沌中自行推演出那必然的结论。
+> **—— 现在，去论证吧。**
 
 
-为什么需要 Cos2Edu？
--------------------
+
+---
+
+## 为什么需要 Cos2Edu？
+
 
 传统 AI 教育工具习惯直接给答案，学生记住结论却不知所以然。
 Cos2Edu 反其道而行——**AI 导师不会告诉你答案，而是通过连续追问，引导你自己推理出结论**。
