@@ -162,17 +162,17 @@ class NarrativeWebSocket {
     })
   }
 
-  activateSyllabus(materialId) {
+  activateSyllabus(materialId, conversationId) {
     this.send({
       type: 'syllabus.activate',
-      payload: { material_id: materialId },
+      payload: { material_id: materialId, conversation_id: conversationId },
     })
   }
 
-  generateAssessment(pointId, characterId) {
+  generateAssessment(pointId, characterId, conversationId) {
     this.send({
       type: 'assessment.generate',
-      payload: { point_id: pointId, character_id: characterId },
+      payload: { point_id: pointId, character_id: characterId, conversation_id: conversationId },
     })
   }
 

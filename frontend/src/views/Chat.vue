@@ -41,6 +41,7 @@
     </div>
     <DynamicRenderer slot-name="overlay" />
     <DynamicRenderer slot-name="panel" />
+    <DynamicRenderer slot-name="sidebar" />
   </div>
 </template>
 
@@ -272,7 +273,26 @@ async function handleChatInputSend() {
     messages.value.push({ role: 'assistant', content: '', timestamp: new Date() })
     isTyping.value = true
 
+    if (!ws.connected.value) {
+      ws.connect()
+      await new Promise(resolve => {
+        const unsub = ws.on('*', () => {
+          if (ws.connected.value) {
+            unsub()
+            resolve()
+          }
+        })
+        setTimeout(resolve, 5000)
+      })
+    }
     ws.sendChat(conversationId.value, userMessage, characterId.value)
+
+    setTimeout(() => {
+      if (sending.value) {
+        sending.value = false
+        isTyping.value = false
+      }
+    }, 30000)
   } catch (e) {
     let errorMsg = e.message || '发送失败'
     

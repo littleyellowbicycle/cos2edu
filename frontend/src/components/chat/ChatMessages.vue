@@ -24,7 +24,7 @@
     />
 
     <TypingIndicator
-      v-if="isTyping"
+      v-if="isTyping && !hasStreamingAssistant"
       :character-name="characterName"
       :character-avatar="characterAvatar"
       :character-avatar-type="characterAvatarType"
@@ -59,7 +59,7 @@
 </template>
 
 <script setup>
-import { ref, watch, nextTick } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import MessageBubble from '@/components/chat/MessageBubble.vue'
 import TypingIndicator from '@/components/chat/TypingIndicator.vue'
 import QuizForm from '@/components/generative/QuizForm.vue'
@@ -79,6 +79,11 @@ defineEmits(['copy', 'quizInteract', 'dismissEvent', 'chooseNarrativeOption'])
 
 const messagesContainer = ref(null)
 let stickyBottom = true
+
+const hasStreamingAssistant = computed(() => {
+  const len = props.messages.length
+  return len > 0 && props.messages[len - 1].role === 'assistant'
+})
 
 function onScroll() {
   const el = messagesContainer.value

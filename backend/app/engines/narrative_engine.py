@@ -45,6 +45,24 @@ class NarrativeEngine:
         self._ui_orchestrator = UIOrchestrator()
         self._message_counts: dict[int, int] = {}
         self._active_quizzes: dict[str, "Quiz"] = {}
+        self._conversation_graphs: dict[int, KnowledgeGraph] = {}
+
+    async def _get_or_build_graph(self, conversation_id: int, conversation=None) -> KnowledgeGraph:
+        if conversation_id in self._conversation_graphs:
+            return self._conversation_graphs[conversation_id]
+        if conversation and conversation.material:
+            try:
+                async with UnitOfWork() as uow:
+                    syllabus = await uow.syllabuses.get_by_material_id(conversation.material.id)
+                if syllabus and syllabus.content:
+                    graph = KnowledgeGraph()
+                    graph.load_from_syllabus_content(syllabus.content)
+                    self._conversation_graphs[conversation_id] = graph
+                    logger.info(f"Built conversation graph for material {conversation.material.id}: {len(graph.get_all_points())} points")
+                    return graph
+            except Exception as e:
+                logger.warning(f"Failed to build graph for material {conversation.material.id}: {e}")
+        return self.graph
 
     async def handle_chat_message(
         self,
@@ -67,11 +85,14 @@ class NarrativeEngine:
 
                 self._message_counts[conversation_id] = self._message_counts.get(conversation_id, 0) + 1
 
+                conv_graph = await self._get_or_build_graph(conversation_id, conversation)
+                conv_teaching = TeachingEngine(conv_graph, self.characters, self.teaching.budget)
+                conv_assessment = AssessmentEngine(conv_graph, self.characters)
                 point_data_for_prompt = None
                 if is_structured:
                     mastered = await self._get_mastered_points(uow)
-                    point_data_for_prompt = self.teaching.get_next_teaching_point(mastered)
-                    if point_data_for_prompt and self.assessment and self.assessment.should_trigger_assessment(
+                    point_data_for_prompt = conv_teaching.get_next_teaching_point(mastered)
+                    if point_data_for_prompt and conv_assessment.should_trigger_assessment(
                         point_id=point_data_for_prompt["point_id"],
                         mastered_points=mastered,
                         message_count=self._message_counts[conversation_id],
@@ -254,7 +275,9 @@ class NarrativeEngine:
         existing = await self._get_progress_for_point(point_id)
         attempts = (existing.get("attempts", 0) if existing else 0) + 1
 
-        assessment_result = self.assessment.assess_point(
+        conv_graph = self._conversation_graphs.get(conversation_id, self.graph)
+        conv_assessment = AssessmentEngine(conv_graph, self.characters)
+        assessment_result = conv_assessment.assess_point(
             point_id=point_id,
             scores=scores,
             attempts=attempts,
@@ -287,9 +310,13 @@ class NarrativeEngine:
         point_id: str,
         character_id: str,
         model_config=None,
+        conversation_id: int | None = None,
     ) -> dict:
         """使用 LLM 生成考核题目"""
-        point_meta = self.graph.get_point(point_id)
+        graph = self.graph
+        if conversation_id is not None and conversation_id in self._conversation_graphs:
+            graph = self._conversation_graphs[conversation_id]
+        point_meta = graph.get_point(point_id)
         if not point_meta:
             return {"error": f"Knowledge point {point_id} not found"}
 
@@ -346,8 +373,11 @@ class NarrativeEngine:
             logger.error(f"Quiz generation failed: {e}")
             return {"error": str(e)}
 
-    def start_assessment(self, knowledge_point_id: str, num_questions: int = 4) -> "Quiz":
-        point_meta = self.graph.get_point(knowledge_point_id)
+    def start_assessment(self, knowledge_point_id: str, num_questions: int = 4, conversation_id: int | None = None) -> "Quiz":
+        graph = self.graph
+        if conversation_id is not None and conversation_id in self._conversation_graphs:
+            graph = self._conversation_graphs[conversation_id]
+        point_meta = graph.get_point(knowledge_point_id)
         if not point_meta:
             raise ValueError(f"Knowledge point '{knowledge_point_id}' not found")
 
@@ -484,7 +514,7 @@ class NarrativeEngine:
             logger.error(f"Failed to get progress for point {point_id}: {e}")
         return None
 
-    async def get_full_snapshot(self) -> dict:
+    async def get_full_snapshot(self, conversation_id: int | None = None) -> dict:
         """返回完整状态快照，用于 WS 重连对账"""
         world_snapshot = self.world.get_full_snapshot()
 
@@ -506,13 +536,14 @@ class NarrativeEngine:
                         "trust_level": cs.trust_level,
                     }
 
+        active_graph = self._conversation_graphs.get(conversation_id, self.graph) if conversation_id else self.graph
         async with UnitOfWork() as uow:
             mastered = await self._get_mastered_points(uow)
-            all_points = self.graph.get_all_points()
-            unlocked = self.graph.get_next_unlocked(mastered)
+            all_points = active_graph.get_all_points()
+            unlocked = active_graph.get_next_unlocked(mastered)
 
         current_point = unlocked[0] if unlocked else None
-        point_meta = self.graph.get_point(current_point) if current_point else None
+        point_meta = active_graph.get_point(current_point) if current_point else None
 
         return {
             "world": world_snapshot,
@@ -531,7 +562,7 @@ class NarrativeEngine:
             "narrativeChoices": None,
         }
 
-    async def activate_syllabus(self, material_id: int) -> dict:
+    async def activate_syllabus(self, material_id: int, conversation_id: int | None = None) -> dict:
         async with UnitOfWork() as uow:
             syllabus = await uow.syllabuses.get_by_material_id(material_id)
             if not syllabus:
@@ -542,12 +573,17 @@ class NarrativeEngine:
             total_days = content.get("total_days", content.get("course", {}).get("total_days", 0))
 
         self.graph.load_from_syllabus_content(content)
+        if conversation_id is not None:
+            conv_graph = KnowledgeGraph()
+            conv_graph.load_from_syllabus_content(content)
+            self._conversation_graphs[conversation_id] = conv_graph
         self.world.activate_syllabus(material_id, syllabus_name, total_days)
+        active_graph = self._conversation_graphs.get(conversation_id, self.graph) if conversation_id else self.graph
 
         return {
             "material_id": material_id,
             "syllabus_name": syllabus_name,
             "total_days": self.world._total_days,
-            "knowledge_points": len(self.graph.get_all_points()),
-            "modules": len(self.graph._module_order),
+            "knowledge_points": len(active_graph.get_all_points()),
+            "modules": len(active_graph._module_order),
         }

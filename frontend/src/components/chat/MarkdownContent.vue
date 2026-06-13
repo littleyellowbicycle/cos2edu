@@ -33,7 +33,7 @@ const emojiSectionRegex = /^([\p{Emoji_Presentation}\p{Extended_Pictographic}\u{
 const customRenderer = new marked.Renderer()
 
 customRenderer.heading = function (data) {
-  const text = data.text
+  const text = (this.parser?.parseInline?.(data.tokens) ?? marked.parseInline(data.text))
   const depth = data.depth
   const match = text.match(emojiSectionRegex)
   if (match) {
@@ -45,9 +45,10 @@ customRenderer.heading = function (data) {
 }
 
 customRenderer.table = function (data) {
-  const headers = data.header.map(h => `<th>${h.text}</th>`).join('')
+  const inline = (cell) => this.parser?.parseInline?.(cell.tokens) ?? marked.parseInline(cell.text)
+  const headers = data.header.map(h => `<th>${inline(h)}</th>`).join('')
   const rows = data.rows.map(row => {
-    const cells = row.map(cell => `<td>${cell.text}</td>`).join('')
+    const cells = row.map(cell => `<td>${inline(cell)}</td>`).join('')
     return `<tr>${cells}</tr>`
   }).join('')
   return `<div class="ai-table-wrapper"><table class="ai-table"><thead><tr>${headers}</tr></thead><tbody>${rows}</tbody></table></div>`
@@ -68,24 +69,24 @@ function detectCalloutType(emoji) {
 }
 
 customRenderer.blockquote = function (data) {
-  const text = data.text
-  const match = text.match(emojiSectionRegex)
+  const html = (this.parser?.parse?.(data.tokens) ?? marked.parse(data.text))
+  const match = data.text.match(emojiSectionRegex)
   if (match) {
     const type = detectCalloutType(match[1])
-    return `<div class="ai-callout ai-callout--${type}"><span class="ai-callout-emoji">${match[1]}</span><div class="ai-callout-content">${match[2]}${text.replace(match[0], '')}</div></div>`
+    return `<div class="ai-callout ai-callout--${type}"><span class="ai-callout-emoji">${match[1]}</span><div class="ai-callout-content">${html}</div></div>`
   }
-  return `<blockquote class="ai-blockquote">${text}</blockquote>`
+  return `<blockquote class="ai-blockquote">${html}</blockquote>`
 }
 
 customRenderer.list = function (data) {
   const tag = data.ordered ? 'ol' : 'ul'
-  const items = data.items.map(item => `<li>${item.text}</li>`).join('')
+  const items = data.items.map(item => `<li>${this.parser?.parse?.(item.tokens) ?? marked.parse(item.text)}</li>`).join('')
   const cls = data.ordered ? 'ai-list ai-list--ordered' : 'ai-list'
   return `<${tag} class="${cls}">${items}</${tag}>`
 }
 
 customRenderer.paragraph = function (data) {
-  const text = data.text
+  const text = (this.parser?.parseInline?.(data.tokens) ?? marked.parseInline(data.text))
   if (text.startsWith('<h') || text.startsWith('<div class="ai-') || text.startsWith('<details')) {
     return text
   }
@@ -200,39 +201,50 @@ mermaid.initialize({
   securityLevel: 'loose'
 })
 
+const THINK_OPEN = /<think>/i
+const THINK_PAIR = /<think>([\s\S]*?)<\/think>/gi
+
 const renderedHtml = computed(() => {
   if (!props.content) return ''
-  let text = props.content
-  // Convert think tags to collapsible details
-  text = text.replace(/<think>([\s\S]*?)<\/think>/gi, (_, thought) => {
-    const preview = thought.trim().slice(0, 60)
-    return `<details class="think-block"><summary>💭 思考过程 · ${preview}${thought.trim().length > 60 ? '…' : ''}</summary><div class="think-content">${marked.parse(preprocessMarkdown(thought.trim()))}</div></details>`
-  })
-  text = preprocessMarkdown(text)
-  let html = marked.parse(text)
-  return DOMPurify.sanitize(html, {
-    ADD_TAGS: ['details', 'summary', 'canvas'],
-    ADD_ATTR: ['collapsible'],
-  })
+  try {
+    let text = props.content
+    if (props.streaming && THINK_OPEN.test(text) && !text.includes('</think>')) {
+      text = text.replace(/<think>[\s\S]*$/i, '')
+    }
+    text = text.replace(THINK_PAIR, '')
+    text = preprocessMarkdown(text)
+    let html = marked.parse(text)
+    return DOMPurify.sanitize(html, {
+      ADD_TAGS: ['canvas'],
+    })
+  } catch (e) {
+    console.error('[MarkdownContent] Render error:', e)
+    return `<pre style="white-space:pre-wrap;color:inherit">${escapeHtml(props.content)}</pre>`
+  }
 })
 
-watch(renderedHtml, () => {
+function renderMermaidAndCopy() {
   nextTick(() => {
     if (contentRef.value) {
       bindCopyButtons(contentRef.value)
-      if (!props.streaming) {
-        renderMermaid(contentRef.value)
-      }
+      renderMermaid(contentRef.value)
       emit('rendered')
     }
   })
+}
+
+watch(renderedHtml, () => {
+  renderMermaidAndCopy()
+})
+
+watch(() => props.streaming, (streaming) => {
+  if (!streaming) {
+    renderMermaidAndCopy()
+  }
 })
 
 onMounted(() => {
-  if (contentRef.value) {
-    renderMermaid(contentRef.value)
-    bindCopyButtons(contentRef.value)
-  }
+  renderMermaidAndCopy()
 })
 </script>
 
@@ -243,35 +255,6 @@ onMounted(() => {
   color: var(--color-ink);
   word-wrap: break-word;
   overflow-wrap: break-word;
-}
-
-.markdown-content :deep(.think-block) {
-  background: var(--color-bg-warm);
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  padding: 8px 12px;
-  margin-bottom: 12px;
-  font-size: 14px;
-}
-
-.markdown-content :deep(.think-block summary) {
-  cursor: pointer;
-  color: var(--color-text-muted);
-  font-weight: 500;
-  user-select: none;
-}
-
-.markdown-content :deep(.think-block summary:hover) {
-  color: var(--color-ink);
-}
-
-.markdown-content :deep(.think-content) {
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px dashed var(--color-border);
-  color: var(--color-text-muted);
-  font-size: 13px;
-  line-height: 1.6;
 }
 
 .markdown-content.is-streaming::after {

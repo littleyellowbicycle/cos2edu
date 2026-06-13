@@ -47,9 +47,10 @@ async def websocket_endpoint(
                 await websocket.send_text(json.dumps({"type": "pong"}))
 
             elif msg_type == "state.sync":
+                conversation_id_sync = payload.get("conversation_id")
                 engine = get_narrative_engine()
                 if engine:
-                    snapshot = await engine.get_full_snapshot()
+                    snapshot = await engine.get_full_snapshot(conversation_id=conversation_id_sync)
                     await websocket.send_text(json.dumps({
                         "type": "state.full",
                         "payload": snapshot,
@@ -152,11 +153,13 @@ async def websocket_endpoint(
             elif msg_type == "assessment.generate":
                 point_id = payload.get("point_id", "")
                 character_id = payload.get("character_id", "")
+                conversation_id = payload.get("conversation_id")
                 engine = get_narrative_engine()
                 if engine and engine.assessment:
                     result = await engine.generate_quiz(
                         point_id=point_id,
                         character_id=character_id,
+                        conversation_id=conversation_id,
                     )
                     if "error" in result:
                         await websocket.send_text(json.dumps({
@@ -227,6 +230,7 @@ async def websocket_endpoint(
 
             elif msg_type == "syllabus.activate":
                 material_id = payload.get("material_id")
+                conversation_id = payload.get("conversation_id")
                 if not material_id:
                     await websocket.send_text(json.dumps({
                         "type": "error",
@@ -235,14 +239,14 @@ async def websocket_endpoint(
                     continue
                 engine = get_narrative_engine()
                 if engine:
-                    result = await engine.activate_syllabus(material_id)
+                    result = await engine.activate_syllabus(material_id, conversation_id=conversation_id)
                     if "error" in result:
                         await websocket.send_text(json.dumps({
                             "type": "error",
                             "content": result["error"],
                         }))
                     else:
-                        snapshot = await engine.get_full_snapshot()
+                        snapshot = await engine.get_full_snapshot(conversation_id=conversation_id)
                         await websocket.send_text(json.dumps({
                             "type": "syllabus.activated",
                             "payload": result,
