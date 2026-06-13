@@ -17,13 +17,13 @@
   <a href="#文档">文档</a>
 </p>
 
+<div align="center">
+
 </div>
 
 *试问，若未经逻辑的严苛解析，那些被强行塞入你脑海的"答案"，与先验的幻象何异？*
 
 <br>
-
-<div align="center">
 
 <details>
 
