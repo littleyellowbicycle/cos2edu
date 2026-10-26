@@ -400,27 +400,19 @@ async def generate_material_summary_async(material_id: int):
 @router.post("/materials/repair-stuck")
 async def repair_stuck_materials():
     """Re-process materials stuck at 'parsing' status."""
-    from app.tasks.material_pipeline import process_material
+    from app.tasks.material_pipeline import repair_stuck_materials
     from app.repositories.unit_of_work import UnitOfWork
 
-    async with UnitOfWork() as uow:
-        stuck = await uow.materials.get_by_status("parsing")
+    result = await repair_stuck_materials(uow_factory=UnitOfWork)
 
-    if not stuck:
+    if not result["stuck"]:
         return {"message": "没有卡住的教学材料", "repaired": 0}
 
-    repaired = []
-    for material in stuck:
-        if material.content:
-            asyncio.create_task(process_material(
-                material_id=material.id,
-                file_path="",
-                uow_factory=UnitOfWork,
-                text=material.content,
-            ))
-            repaired.append(material.id)
-
-    return {"message": f"已触发 {len(repaired)} 个材料的后台处理", "repaired": repaired}
+    return {
+        "message": f"已触发 {len(result['repaired'])} 个材料的后台处理",
+        "repaired": result["repaired"],
+        "failed": result["failed"],
+    }
 
 
 async def _call_llm_for_summary(content: str) -> str:

@@ -96,6 +96,15 @@ class MaterialStatusEvent(BaseModel):
     capabilities: dict
 
 
+class MaterialQualityRejectedEvent(BaseModel):
+    """Emitted when the quality_check stage rejects an auto-generated outline."""
+    type: str = "material.quality_rejected"
+    material_id: int
+    status: str = "review_rejected"
+    reasons: list[str] = Field(default_factory=list, description="校验失败原因列表")
+    progress_message: str = ""
+
+
 class PingMessage(BaseModel):
     type: str = "ping"
 

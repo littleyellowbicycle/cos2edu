@@ -261,16 +261,17 @@ class NarrativeEngine:
         if not self.assessment:
             return {"error": "AssessmentEngine not initialized"}
 
+        # 兼容两种答案载荷形态：
+        #   - tuple/list: [question_dict, answer_str]
+        #   - dict: {"question": {...}, "answer": "..."}
+        # 畸形条目被跳过而不是让整个考核崩溃。
         scores = []
-        correct_count = 0
         for entry in answers:
-            q = entry.get("question", {})
-            a = entry.get("answer", "")
-            if isinstance(a, str) and isinstance(q, dict):
-                result = self.assessment.evaluate_answer(q, a)
-                scores.append(result["score"])
-                if result["is_correct"]:
-                    correct_count += 1
+            question, answer = self._normalize_answer_entry(entry)
+            if question is None or answer is None:
+                continue
+            result = self.assessment.evaluate_answer(question, answer)
+            scores.append(result["score"])
 
         existing = await self._get_progress_for_point(point_id)
         attempts = (existing.get("attempts", 0) if existing else 0) + 1
@@ -304,6 +305,21 @@ class NarrativeEngine:
             "score": assessment_result.score,
             "attempts": assessment_result.attempts,
         }
+
+    @staticmethod
+    def _normalize_answer_entry(entry):
+        """Return (question_dict, answer_str) from either a pair or a dict payload."""
+        if isinstance(entry, dict):
+            question = entry.get("question") or entry.get("question_data")
+            answer = entry.get("answer")
+            if isinstance(question, dict) and isinstance(answer, str):
+                return question, answer
+            return None, None
+        if isinstance(entry, (list, tuple)) and len(entry) == 2:
+            question, answer = entry
+            if isinstance(question, dict) and isinstance(answer, str):
+                return question, answer
+        return None, None
 
     async def generate_quiz(
         self,

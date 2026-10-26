@@ -6,7 +6,7 @@ from datetime import datetime
 class MaterialBase(BaseModel):
     title: str = Field(..., min_length=1, max_length=200, description="教材标题")
     description: Optional[str] = Field(None, max_length=1000, description="教材描述")
-    content_type: str = Field(default="text", description="内容类型: text, url, file")
+    content_type: str = Field(default="text", max_length=20, description="内容类型: text, url, file")
     content: Optional[str] = Field(None, description="教材内容(文本)")
     content_url: Optional[str] = Field(None, max_length=500, description="教材内容(URL或文件路径)")
 

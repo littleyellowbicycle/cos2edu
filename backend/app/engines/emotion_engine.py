@@ -8,6 +8,16 @@ from app.core.logging_config import get_logger
 logger = get_logger(__name__)
 
 
+def _coerce_delta(raw, fallback: float) -> float:
+    """Coerce an event-sensitivity value (float or quoted YAML string like '+0.05') to float."""
+    if isinstance(raw, (int, float)):
+        return float(raw)
+    try:
+        return float(str(raw).replace("+", "").strip())
+    except (TypeError, ValueError):
+        return fallback
+
+
 @dataclass
 class EmotionUpdate:
     character_id: str
@@ -28,8 +38,10 @@ class EmotionEngine:
 
     def _initialize_from_characters(self) -> None:
         for cid, char in self._character_engine.get_all_characters().items():
-            self._mood_state[cid] = char.emotion_profile.get("base_mood", 0.7)
-            self._trust_state[cid] = char.relationship_dynamics.get("initial_trust", 0.5)
+            self._mood_state[cid] = _coerce_delta(char.emotion_profile.get("base_mood", 0.7), 0.7)
+            self._trust_state[cid] = _coerce_delta(
+                char.relationship_dynamics.get("trust_growth_rate", 0.5), 0.5
+            )
 
     def get_mood(self, character_id: str) -> float:
         return self._mood_state.get(character_id, 0.7)
@@ -49,7 +61,10 @@ class EmotionEngine:
 
         profile = char.emotion_profile
         sensitivity = profile.get("event_sensitivity", {})
-        delta = sensitivity.get(trigger_event, trigger_value)
+        raw_delta = sensitivity.get(trigger_event, trigger_value)
+        # YAML may emit quoted deltas ("+0.08"); coerce to float instead of
+        # letting str + float raise TypeError inside the mood update.
+        delta = _coerce_delta(raw_delta, trigger_value)
 
         current_mood = self._mood_state.get(character_id, profile.get("base_mood", 0.7))
         new_mood = max(0.0, min(1.0, current_mood + delta))
@@ -59,14 +74,14 @@ class EmotionEngine:
 
         trust_config = char.relationship_dynamics
         if trigger_event == "student_correct":
-            trust_delta = trust_config.get("trust_growth_rate", 0.01)
+            trust_delta = _coerce_delta(trust_config.get("trust_growth_rate", 0.01), 0.01)
         elif trigger_event == "student_wrong":
-            trust_delta = -trust_config.get("trust_decay_rate", 0.005)
+            trust_delta = -_coerce_delta(trust_config.get("trust_decay_rate", 0.005), 0.005)
         else:
             trust_delta = 0.0
 
         current_trust = self._trust_state.get(character_id, 0.5)
-        max_trust = trust_config.get("max_trust", 1.0)
+        max_trust = _coerce_delta(trust_config.get("max_trust", 1.0), 1.0)
         new_trust = max(0.0, min(max_trust, current_trust + trust_delta))
         self._trust_state[character_id] = new_trust
 
@@ -85,8 +100,8 @@ class EmotionEngine:
         if not char:
             return None
 
-        decay_rate = char.emotion_profile.get("mood_decay", 0.02)
-        base_mood = char.emotion_profile.get("base_mood", 0.7)
+        decay_rate = _coerce_delta(char.emotion_profile.get("mood_decay", 0.02), 0.02)
+        base_mood = _coerce_delta(char.emotion_profile.get("base_mood", 0.7), 0.7)
 
         current_mood = self._mood_state.get(character_id, base_mood)
         decay_amount = decay_rate * hours_elapsed
