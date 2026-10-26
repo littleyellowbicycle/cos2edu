@@ -1,16 +1,20 @@
 import asyncio
 import json
-import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Optional, Callable
+from typing import Optional, Callable, Awaitable
 
 from app.parsers.parser_registry import parser_registry
 from app.parsers.base import ParseResult, ParseErrorCode
 from app.services.rag_service import get_rag_service
+from app.tasks.quality_check import validate_outline, QualityCheckResult
 from app.core.logging_config import get_logger
 
 logger = get_logger(__name__)
+
+
+# Statuses considered "stuck" when the process died mid-flight; repair-stuck scans these.
+STUCK_STATUSES = ("parsing",)
 
 
 class MaterialPipelineError(Exception):
@@ -32,6 +36,7 @@ class MaterialTask:
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     parse_result: Optional[ParseResult] = None
+    quality_reasons: list[str] = field(default_factory=list)
 
 
 _task_registry: dict[int, MaterialTask] = {}
@@ -44,8 +49,9 @@ async def process_material(
     ws_notify: Optional[Callable] = None,
     text: Optional[str] = None,
 ) -> None:
-    """Process a material through the full pipeline: parse -> index -> outline -> pending_review
-    
+    """Process a material through the full pipeline:
+    parse -> index -> outline -> quality_check -> pending_review
+
     If `text` is provided, skips file parsing and uses it directly.
     """
     task = MaterialTask(material_id=material_id, started_at=datetime.now(timezone.utc))
@@ -56,8 +62,7 @@ async def process_material(
 
         if text is not None:
             # Content already available — skip parsing phase
-            from app.parsers.base import ParseResult
-            result = ParseResult(success=True, text=text)
+            result = ParseResult(success=True, text=text, char_count=len(text))
             task.progress = 30
             task.progress_message = "内容已就绪"
         else:
@@ -91,22 +96,31 @@ async def process_material(
 
         async with uow_factory() as uow:
             material = await uow.materials.get_by_id(material_id)
-            if material:
-                await uow.materials.update(material, {
-                    "content": result.text[:500000],
-                    "page_count": getattr(result, 'page_count', None),
-                    "char_count": getattr(result, 'char_count', len(result.text)),
-                    "status": "indexed",
-                })
+            if material is None:
+                # Material vanished mid-flight (deleted) — fail loudly instead of
+                # silently progressing against a detached/ghost row.
+                raise MaterialPipelineError(
+                    "MATERIAL_NOT_FOUND",
+                    f"教材 {material_id} 在索引阶段不存在，可能已被删除",
+                )
+            await uow.materials.update(material, {
+                "content": result.text[:500000],
+                "page_count": getattr(result, 'page_count', None) or None,
+                # `getattr`'s default only applies when the attribute is missing;
+                # the text-path ParseResult carries char_count=0, so fall back
+                # to len(text) when the parser did not report a count.
+                "char_count": getattr(result, 'char_count', 0) or len(result.text),
+                "status": "indexed",
+            })
         task.status = "indexed"
         task.progress_message = "索引建立完成，可以开始自由对话"
         task.progress = 60
         await _notify(ws_notify, material_id, task)
 
-        # Phase 2.5: Index text into RAG
+        # Phase 2.5: Index text into RAG (best-effort; never blocks the pipeline)
         try:
             rag = get_rag_service()
-            if rag._initialized and result.text:
+            if getattr(rag, "_initialized", False) and result.text:
                 num_chunks = rag.index_text(result.text, source_id=str(material_id))
                 logger.info(f"RAG indexed {num_chunks} chunks for material {material_id}")
         except Exception as e:
@@ -124,41 +138,98 @@ async def process_material(
             logger.warning(f"Outline generation failed for material {material_id}: {outline_err}")
             outline = None
 
-        if outline:
-            task.progress = 90
-            task.progress_message = "大纲生成完成，等待确认"
-            task.progress = 100
-
-            async with uow_factory() as uow:
-                fresh = await uow.materials.get_by_id(material_id)
-                if fresh:
-                    await uow.materials.update(fresh, {
-                        "status": "pending_review",
-                        "review_status": "pending",
-                    })
-
-                from models.syllabus import Syllabus
-                syllabus_data = {
-                    "material_id": material_id,
-                    "name": outline.get("name", "自动生成大纲"),
-                    "total_days": outline.get("total_days", 60),
-                    "content": outline,
-                    "generated_by": "llm",
-                    "review_status": "pending",
-                }
-                await uow.syllabuses.create(syllabus_data)
-
-            task.status = "pending_review"
-            await _notify(ws_notify, material_id, task)
-        else:
+        if not outline:
+            # Outline generation failed: keep the material indexed for free chat.
             task.status = "indexed"
             task.progress = 100
             task.progress_message = "大纲生成失败，可使用自由对话模式"
             async with uow_factory() as uow:
-                await uow.materials.update(await uow.materials.get_by_id(material_id), {
-                    "status": "indexed",
-                })
+                material = await uow.materials.get_by_id(material_id)
+                if material:
+                    await uow.materials.update(material, {"status": "indexed"})
             await _notify(ws_notify, material_id, task)
+            return
+
+        # Phase 4: Quality check (outline validation before human review)
+        task.status = "quality_check"
+        task.progress_message = "正在校验大纲质量..."
+        task.progress = 85
+        await _notify(ws_notify, material_id, task)
+
+        try:
+            check: QualityCheckResult = validate_outline(outline)
+        except Exception as vc_err:
+            # 校验器内部异常属于防御性降级：不让整条管线崩到 failed，
+            # 物料退回到 indexed（自由对话可用），由人工后续处理。
+            logger.error(f"Quality check crashed for material {material_id}: {vc_err}", exc_info=True)
+            task.status = "indexed"
+            task.progress = 100
+            task.progress_message = "大纲质量校验异常，已降级为自由对话模式"
+            async with uow_factory() as uow:
+                material = await uow.materials.get_by_id(material_id)
+                if material:
+                    await uow.materials.update(material, {"status": "indexed"})
+            await _notify(ws_notify, material_id, task)
+            return
+
+        if not check.passed:
+            task.status = "review_rejected"
+            task.progress = 100
+            task.progress_message = "大纲未通过质量校验"
+            task.error_code = check.error_code or "QUALITY_CHECK_FAILED"
+            task.error_message = "; ".join(check.reasons)
+            task.quality_reasons = check.reasons
+            task.completed_at = datetime.now(timezone.utc)
+
+            async with uow_factory() as uow:
+                material = await uow.materials.get_by_id(material_id)
+                if material:
+                    await uow.materials.update(material, {
+                        "status": "review_rejected",
+                        "review_status": "rejected",
+                        "error_code": task.error_code,
+                    })
+
+            await _notify(ws_notify, material_id, task)
+            await _notify_quality_rejected(ws_notify, material_id, check)
+            return
+
+        # Phase 5: Outline passed review gate -> pending_review
+        task.progress = 90
+        task.progress_message = "大纲生成完成，等待确认"
+        task.progress = 100
+
+        async with uow_factory() as uow:
+            # Re-fetch inside THIS session: the material object from an earlier
+            # (closed) session is detached and updates on it are not persisted.
+            material = await uow.materials.get_by_id(material_id)
+            if material is None:
+                raise MaterialPipelineError(
+                    "MATERIAL_NOT_FOUND",
+                    f"教材 {material_id} 在大纲阶段不存在，可能已被删除",
+                )
+            await uow.materials.update(material, {
+                "status": "pending_review",
+                "review_status": "pending",
+            })
+
+            syllabus_data = {
+                "name": outline.get("name", "自动生成大纲"),
+                "total_days": outline.get("total_days", 60),
+                "content": outline,
+                "generated_by": "llm",
+                "review_status": "pending",
+            }
+            # 重复触发（手动重跑 / repair-stuck）时更新已有大纲，避免同一物料
+            # 堆积多条 syllabus，导致 get_by_material_id 命中多行。
+            existing_syllabus = await uow.syllabuses.get_by_material_id(material_id)
+            if existing_syllabus:
+                await uow.syllabuses.update(existing_syllabus, syllabus_data)
+            else:
+                await uow.syllabuses.create({**syllabus_data, "material_id": material_id})
+
+        task.status = "pending_review"
+        await _notify(ws_notify, material_id, task)
 
     except Exception as e:
         logger.error(f"Material pipeline error for {material_id}: {e}", exc_info=True)
@@ -174,16 +245,20 @@ async def process_material(
         await _notify(ws_notify, material_id, task)
 
 
-async def _generate_outline(text_content: str, uow_factory) -> Optional[dict]:
+async def _generate_outline(text_content: str, uow_factory=None) -> Optional[dict]:
     """Use LLM to generate a structured outline from text content
-    
+
     Raises exceptions with descriptive messages instead of returning None,
     so callers can report the specific cause of failure.
+    `uow_factory` is injected so tests can bind to an in-memory session;
+    it defaults to the production UnitOfWork when omitted.
     """
     from app.services.chat_service import LLMProvider
     from app.repositories.unit_of_work import UnitOfWork
 
-    async with UnitOfWork() as uow:
+    factory = uow_factory or UnitOfWork
+
+    async with factory() as uow:
         config_obj = await uow.model_configs.get_default()
         if not config_obj:
             raise ValueError("未配置默认AI模型，请前往设置页面配置模型和API Key")
@@ -285,6 +360,64 @@ async def _update_material_status(uow_factory, material_id: int, status: str,
         logger.error(f"Failed to update material status: {e}")
 
 
+async def repair_stuck_materials(
+    uow_factory,
+    ws_notify: Optional[Callable] = None,
+    reprocess: Optional[Callable[..., Awaitable[None]]] = None,
+    schedule: Optional[Callable[[Awaitable], None]] = None,
+) -> dict:
+    """Re-process materials stuck in a transitional status after a crash.
+
+    - Materials that already carry `content` are reprocessed in-place via the
+      text path (no file re-read), scheduled through `schedule` (defaults to
+      `asyncio.create_task`; tests may pass a collector to await directly).
+    - Materials without content are marked `failed` instead of hanging forever
+      in the stuck status (they cannot be repaired without the source file).
+
+    Returns a summary dict: {"repaired": [...ids], "failed": [...ids], "stuck": [...]}
+    """
+    reprocess_fn = reprocess or process_material
+    schedule_fn = schedule or asyncio.create_task
+    repaired: list[int] = []
+    failed: list[int] = []
+    stuck_ids: list[int] = []
+
+    async with uow_factory() as uow:
+        stuck_materials: list = []
+        for status in STUCK_STATUSES:
+            stuck_materials.extend(await uow.materials.get_by_status(status))
+
+    for material in stuck_materials:
+        stuck_ids.append(material.id)
+        if material.content:
+            schedule_fn(reprocess_fn(
+                material_id=material.id,
+                file_path="",
+                uow_factory=uow_factory,
+                ws_notify=ws_notify,
+                text=material.content,
+            ))
+            repaired.append(material.id)
+        else:
+            await _update_material_status(
+                uow_factory, material.id, "failed", error_code="STUCK_NO_CONTENT"
+            )
+            failed.append(material.id)
+
+    logger.info(f"repair-stuck: repaired={repaired}, failed={failed}")
+    return {"repaired": repaired, "failed": failed, "stuck": stuck_ids}
+
+
+def _capabilities_for(status: str) -> dict:
+    return {
+        "free_chat": status in ("indexed", "outlining", "quality_check", "pending_review",
+                                "review_rejected"),
+        "structured_mode": status == "ready",
+        "exercises": status == "ready",
+        "progress_tracking": status == "ready",
+    }
+
+
 async def _notify(ws_notify: Optional[Callable], material_id: int, task: MaterialTask) -> None:
     if ws_notify:
         try:
@@ -295,16 +428,32 @@ async def _notify(ws_notify: Optional[Callable], material_id: int, task: Materia
                     "status": task.status,
                     "progress": task.progress,
                     "progress_message": task.progress_message,
-                    "capabilities": {
-                        "free_chat": task.status in ("indexed", "outlining", "pending_review"),
-                        "structured_mode": task.status == "ready",
-                        "exercises": task.status == "ready",
-                        "progress_tracking": task.status == "ready",
-                    },
+                    "capabilities": _capabilities_for(task.status),
                 },
             })
         except Exception as e:
             logger.error(f"WebSocket notify failed: {e}")
+
+
+async def _notify_quality_rejected(
+    ws_notify: Optional[Callable],
+    material_id: int,
+    check: QualityCheckResult,
+) -> None:
+    if ws_notify:
+        try:
+            ws_notify({
+                "type": "material.quality_rejected",
+                "payload": {
+                    "material_id": material_id,
+                    "status": "review_rejected",
+                    "reasons": check.reasons,
+                    "error_code": check.error_code,
+                    "progress_message": "大纲未通过质量校验",
+                },
+            })
+        except Exception as e:
+            logger.error(f"WebSocket quality-rejected notify failed: {e}")
 
 
 def get_task_status(material_id: int) -> Optional[MaterialTask]:

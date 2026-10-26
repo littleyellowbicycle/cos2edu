@@ -56,7 +56,8 @@ async def get_material_status(request: Request, material_id: int):
 
     status = material.status if material.status else "parsing"
     capabilities = {
-        "free_chat": status in ("indexed", "outlining", "pending_review"),
+        "free_chat": status in ("indexed", "outlining", "quality_check", "pending_review",
+                                "review_rejected"),
         "structured_mode": status == "ready",
         "exercises": status == "ready",
         "progress_tracking": status == "ready",
@@ -64,7 +65,8 @@ async def get_material_status(request: Request, material_id: int):
 
     response = MaterialStatusResponse(
         status=status,
-        progress=task.progress if task else (100 if status in ("indexed", "pending_review", "ready") else 0),
+        progress=task.progress if task else (100 if status in ("indexed", "pending_review",
+                                                              "review_rejected", "ready") else 0),
         progress_message=task.progress_message if task else "",
         error_code=material.error_code,
         capabilities=capabilities,
